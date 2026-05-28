@@ -34,6 +34,9 @@ type Tab = 'overview' | 'daily' | 'category' | 'extra'
 
 const NOW = new Date()
 
+// 恩格尔系数：食品支出占比。识别食品类别用类目名兜底（默认类目）。
+const FOOD_CATEGORY_NAMES = new Set(['三餐', '零食', '水果', 'Meals', 'Snacks', 'Fruits'])
+
 function monthStart(y: number, m: number) {
   return `${y}-${String(m).padStart(2, '0')}-01`
 }
@@ -199,6 +202,15 @@ export default function Charts() {
   }, [monthlyTxs, selectedCatId, catType])
 
   // ── Tab 4: Extra ──────────────────────────────────────────────────────
+  // 上月（用来环比）：从 allTxs 现取
+  const prevMonthTxs = useMemo(() => {
+    const prevMonth = month === 1 ? 12 : month - 1
+    const prevYear  = month === 1 ? year - 1 : year
+    const start = monthStart(prevYear, prevMonth)
+    const end   = monthEnd(prevYear, prevMonth)
+    return allTxs.filter(tx => tx.date >= start && tx.date < end && (tx.type === 'expense' || tx.type === 'income'))
+  }, [allTxs, year, month])
+
   const extraStats = useMemo(() => {
     const expenses = monthlyTxs.filter(tx => tx.type === 'expense')
     const incomes  = monthlyTxs.filter(tx => tx.type === 'income')
@@ -228,9 +240,34 @@ export default function Charts() {
     const topCat = Object.values(catMap).sort((a, b) => b.total - a.total)[0] ?? null
     const savingsRate = totalInc > 0 ? ((totalInc - totalExp) / totalInc * 100) : null
 
-    return { totalExp, totalInc, avgDailyExp, maxExpTx, maxDow, dowExp, topCat, savingsRate }
+    // 恩格尔系数（食品支出 / 总支出）。仅按默认食品类目兜底识别。
+    const foodExp = expenses.reduce((s, tx) => {
+      const name = tx.categories?.name ?? ''
+      return FOOD_CATEGORY_NAMES.has(name) ? s + cvtTx(tx.amount, tx.currency, tx.exchange_rate) : s
+    }, 0)
+    const engelCoef = totalExp > 0 && foodExp > 0 ? (foodExp / totalExp * 100) : null
+
+    // 环比上月
+    const prevExp = prevMonthTxs.filter(tx => tx.type === 'expense')
+      .reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
+    const prevInc = prevMonthTxs.filter(tx => tx.type === 'income')
+      .reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
+    const expDelta = prevExp > 0 ? ((totalExp - prevExp) / prevExp * 100) : null
+    const incDelta = prevInc > 0 ? ((totalInc - prevInc) / prevInc * 100) : null
+
+    return { totalExp, totalInc, avgDailyExp, maxExpTx, maxDow, dowExp, topCat, savingsRate,
+             foodExp, engelCoef, prevExp, prevInc, expDelta, incDelta }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthlyTxs, year, month])
+  }, [monthlyTxs, prevMonthTxs, year, month])
+
+  // 恩格尔系数等级（联合国标准）
+  function engelTier(coef: number): { label: string; color: string } {
+    if (coef < 30) return { label: t('engelTier1'), color: '#43a047' }
+    if (coef < 40) return { label: t('engelTier2'), color: '#7cb342' }
+    if (coef < 50) return { label: t('engelTier3'), color: '#fdd835' }
+    if (coef < 60) return { label: t('engelTier4'), color: '#fb8c00' }
+    return { label: t('engelTier5'), color: '#e53935' }
+  }
 
   // ── Chart configs ─────────────────────────────────────────────────────
 
@@ -520,15 +557,14 @@ export default function Charts() {
                   </div>
                 )}
 
-                {/* Clickable day list */}
-                <div className="space-y-1 pt-1 border-t border-gray-50">
+                {/* Day list — read-only visualization, day selection happens on the bar chart */}
+                <div className="space-y-1.5 pt-2 border-t border-gray-50">
                   {(() => {
                     const maxExp = Math.max(...dailyData.map(d => d.expense), 0.001)
                     return dailyData.filter(d => d.expense > 0).map(d => (
-                      <button key={d.day}
-                        onClick={() => setSelectedDay(prev => prev === d.day ? null : d.day)}
-                        className={`w-full flex items-center gap-2 py-1.5 px-1 rounded-lg transition-colors ${
-                          selectedDay === d.day ? 'bg-red-50' : 'hover:bg-gray-50'
+                      <div key={d.day}
+                        className={`flex items-center gap-2 px-1 py-0.5 rounded-md ${
+                          selectedDay === d.day ? 'bg-red-50' : ''
                         }`}>
                         <span className="text-xs text-gray-400 w-7 shrink-0 text-right">
                           {lang === 'zh' ? `${d.day}日` : `${d.day}`}
@@ -540,8 +576,7 @@ export default function Charts() {
                         <span className="text-sm font-medium text-gray-700 w-24 text-right shrink-0">
                           {symbol} {fmt(d.expense)}
                         </span>
-                        <ChevronRight size={12} className={`shrink-0 transition-transform ${selectedDay === d.day ? 'text-red-400 rotate-90' : 'text-gray-300'}`} />
-                      </button>
+                      </div>
                     ))
                   })()}
                 </div>
@@ -653,36 +688,36 @@ export default function Charts() {
                   </div>
                 )}
 
-                {/* Custom legend — tap row = toggle hide, tap arrow = daily breakdown */}
-                <div className="space-y-0.5 pt-2 border-t border-gray-50">
+                {/* Custom legend — row tap = toggle hide, arrow tap = drill into daily */}
+                <div className="space-y-2 pt-2 border-t border-gray-50">
                   {catData.map((d, i) => {
                     const isHidden = hiddenCatIds.has(d.id)
                     const pct = visibleTotal > 0 && !isHidden ? (d.total / visibleTotal * 100).toFixed(1) : '—'
                     const color = PIE_COLORS[i % PIE_COLORS.length]
                     return (
-                      <div key={d.id} className={`flex items-center gap-1 transition-opacity ${isHidden ? 'opacity-40' : ''}`}>
+                      <div
+                        key={d.id}
+                        onClick={() => setHiddenCatIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(d.id)) next.delete(d.id); else next.add(d.id)
+                          return next
+                        })}
+                        className={`flex items-center gap-2 cursor-pointer select-none transition-opacity ${isHidden ? 'opacity-35' : 'active:opacity-70'}`}
+                      >
+                        <div className="w-3 h-3 rounded-sm shrink-0"
+                          style={{ background: isHidden ? '#d1d5db' : color }} />
+                        <span className={`text-sm flex-1 truncate ${isHidden ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                          {d.icon} {d.name}
+                        </span>
+                        <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{pct}%</span>
+                        <span className={`text-sm font-medium shrink-0 w-24 text-right ${isHidden ? 'text-gray-400' : 'text-gray-800'}`}>
+                          {symbol} {fmt(d.total)}
+                        </span>
                         <button
-                          onClick={() => setHiddenCatIds(prev => {
-                            const next = new Set(prev)
-                            if (next.has(d.id)) next.delete(d.id); else next.add(d.id)
-                            return next
-                          })}
-                          className="flex items-center gap-2 flex-1 min-w-0 py-1.5 px-1 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                        >
-                          <div className="w-3 h-3 rounded-sm shrink-0"
-                            style={{ background: isHidden ? '#d1d5db' : color }} />
-                          <span className={`text-sm flex-1 text-left truncate ${isHidden ? 'text-gray-400' : 'text-gray-700'}`}>
-                            {d.icon} {d.name}
-                          </span>
-                          <span className="text-xs text-gray-400 shrink-0 w-8 text-right">{pct}%</span>
-                          <span className={`text-sm font-medium shrink-0 w-24 text-right ${isHidden ? 'text-gray-400' : 'text-gray-800'}`}>
-                            {symbol} {fmt(d.total)}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => setSelectedCatId(d.id)}
-                          className="shrink-0 p-2 text-gray-300 active:text-gray-500 transition-colors">
-                          <ChevronRight size={13} />
+                          onClick={e => { e.stopPropagation(); setSelectedCatId(d.id) }}
+                          className="shrink-0 -mr-1 text-gray-300 active:text-gray-500 transition-colors"
+                          aria-label={t('catDailyDetail')}>
+                          <ChevronRight size={14} />
                         </button>
                       </div>
                     )
@@ -756,6 +791,60 @@ export default function Charts() {
                         <p className="text-sm font-semibold text-[#e53935] shrink-0">
                           {symbol} {fmt(extraStats.topCat.total)}
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Engel coefficient */}
+                  {extraStats.engelCoef !== null && (() => {
+                    const tier = engelTier(extraStats.engelCoef)
+                    return (
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <div className="flex items-baseline justify-between mb-1.5">
+                          <p className="text-xs text-gray-400">{t('engelCoefLabel')}</p>
+                          <p className="text-base font-semibold text-gray-800">
+                            {extraStats.engelCoef.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(extraStats.engelCoef, 100)}%`, background: tier.color }} />
+                          </div>
+                          <span className="text-xs font-medium shrink-0" style={{ color: tier.color }}>
+                            {tier.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400">{t('engelCoefDesc')}</p>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Month-over-month */}
+                  {(extraStats.expDelta !== null || extraStats.incDelta !== null) && (
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-2">{t('momLabel')}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-0.5">{t('momExpense')}</p>
+                          {extraStats.expDelta !== null ? (
+                            <p className={`text-sm font-semibold ${extraStats.expDelta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
+                              {extraStats.expDelta > 0 ? '+' : ''}{extraStats.expDelta.toFixed(1)}%
+                            </p>
+                          ) : (
+                            <p className="text-sm text-gray-400">—</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-0.5">{t('momIncome')}</p>
+                          {extraStats.incDelta !== null ? (
+                            <p className={`text-sm font-semibold ${extraStats.incDelta >= 0 ? 'text-green-600' : 'text-[#e53935]'}`}>
+                              {extraStats.incDelta > 0 ? '+' : ''}{extraStats.incDelta.toFixed(1)}%
+                            </p>
+                          ) : (
+                            <p className="text-sm text-gray-400">—</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

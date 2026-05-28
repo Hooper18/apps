@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, Check } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -15,6 +15,7 @@ import {
   CATEGORY_ICONS,
   SUPPORTED_CURRENCIES,
   CURRENCY_SYMBOLS,
+  CURRENCY_LABELS,
 } from '../types'
 
 interface Category { id: string; name: string; type: string; icon: string }
@@ -55,8 +56,6 @@ export default function AddTransaction() {
   const [currency, setCurrency] = useState<Currency>((editTx?.currency as Currency) ?? effectiveDefaultCurrency)
   const [submitting, setSubmitting] = useState(false)
   const [showCurrencyPicker, setShowCPicker] = useState(false)
-  const [pickerStyle, setPickerStyle] = useState<React.CSSProperties>({})
-  const currencyBtnRef = useRef<HTMLButtonElement>(null)
   const [toast, setToast] = useState('')
 
   // Date quick-select
@@ -181,17 +180,6 @@ export default function AddTransaction() {
     }
   }
 
-  function openCurrencyPicker() {
-    const rect = currencyBtnRef.current?.getBoundingClientRect()
-    if (rect) {
-      setPickerStyle({
-        right: window.innerWidth - rect.right,
-        bottom: window.innerHeight - rect.top + 4,
-      })
-    }
-    setShowCPicker(v => !v)
-  }
-
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -283,31 +271,13 @@ export default function AddTransaction() {
                 {label}
               </button>
             ))}
-            {/* Currency picker — inline with date buttons */}
+            {/* Currency picker — opens bottom sheet */}
             <div className="shrink-0 ml-1">
-              <button ref={currencyBtnRef} onClick={openCurrencyPicker}
+              <button onClick={() => setShowCPicker(true)}
                 className="flex items-center gap-0.5 px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium whitespace-nowrap">
                 {currency}<ChevronDown size={12} className="text-gray-400" />
               </button>
             </div>
-            {showCurrencyPicker && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowCPicker(false)} />
-                <div
-                  className="fixed bg-white border border-gray-100 rounded-xl shadow-lg z-50 min-w-[80px] max-h-[180px] overflow-y-auto"
-                  style={pickerStyle}
-                >
-                  {SUPPORTED_CURRENCIES.map(c => (
-                    <button key={c} onClick={() => { setCurrency(c); setShowCPicker(false) }}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                        currency === c ? 'text-red-500 font-semibold' : 'text-gray-700'
-                      }`}>
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
           {/* Custom date input — only shown when "其他/Other" is active */}
           {dateMode === 'other' && (
@@ -382,6 +352,50 @@ export default function AddTransaction() {
           </button>
         </div>
       </div>
+
+      {/* Currency picker bottom sheet */}
+      {showCurrencyPicker && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowCPicker(false)} />
+          <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-2xl z-50 flex flex-col max-h-[70vh]">
+
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+              <h2 className="text-base font-semibold text-gray-800">{t('currencyLabel')}</h2>
+              <button onClick={() => setShowCPicker(false)} className="p-1.5 rounded-full hover:bg-gray-100">
+                <X size={18} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* Currency list */}
+            <div className="overflow-y-auto flex-1 pb-4">
+              {SUPPORTED_CURRENCIES.map(c => {
+                const isActive = currency === c
+                return (
+                  <button
+                    key={c}
+                    onClick={() => { setCurrency(c); setShowCPicker(false) }}
+                    className="w-full flex items-center gap-3 px-5 py-3 active:bg-gray-50 text-left transition-colors"
+                  >
+                    <span className={`text-base font-medium w-12 shrink-0 ${isActive ? 'text-[#e53935]' : 'text-gray-700'}`}>
+                      {CURRENCY_SYMBOLS[c]}
+                    </span>
+                    <span className={`flex-1 text-sm ${isActive ? 'text-[#e53935] font-semibold' : 'text-gray-700'}`}>
+                      {CURRENCY_LABELS[c]}
+                    </span>
+                    {isActive && <Check size={18} className="text-[#e53935] shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {toast && (
         <div className="anim-toast fixed bottom-10 left-1/2 bg-black/75 text-white px-5 py-2.5 rounded-full text-sm whitespace-nowrap z-50 pointer-events-none">

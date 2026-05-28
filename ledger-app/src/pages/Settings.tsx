@@ -25,6 +25,23 @@ type ModalType = 'preferred' | 'default' | 'language' | 'changePwd' | 'export' |
 
 function pad(n: number) { return n.toString().padStart(2, '0') }
 
+// ── Stats display settings ─────────────────────────────────────────────
+export type StatsTabKey = 'overview' | 'daily' | 'category' | 'extra'
+const STATS_TABS_KEY = 'ledger:stats_tabs'
+
+export function getStatsDisplay(): Record<StatsTabKey, boolean> {
+  const defaults: Record<StatsTabKey, boolean> = { overview: true, daily: true, category: true, extra: true }
+  try {
+    const raw = localStorage.getItem(STATS_TABS_KEY)
+    if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Record<StatsTabKey, boolean>>) }
+  } catch { /* ignore */ }
+  return defaults
+}
+
+function saveStatsDisplay(v: Record<StatsTabKey, boolean>) {
+  localStorage.setItem(STATS_TABS_KEY, JSON.stringify(v))
+}
+
 export default function Settings() {
   const navigate = useNavigate()
   const { user, signIn, signOut, updatePassword } = useAuth()
@@ -41,6 +58,17 @@ export default function Settings() {
 
   const [modal, setModal] = useState<ModalType>(null)
   const [saving, setSaving] = useState(false)
+  const [statsDisplay, setStatsDisplay] = useState<Record<StatsTabKey, boolean>>(getStatsDisplay)
+
+  function toggleStatsTab(key: StatsTabKey) {
+    setStatsDisplay(prev => {
+      const enabled = (Object.keys(prev) as StatsTabKey[]).filter(k => prev[k]).length
+      if (prev[key] && enabled <= 1) return prev
+      const next = { ...prev, [key]: !prev[key] }
+      saveStatsDisplay(next)
+      return next
+    })
+  }
 
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -319,6 +347,30 @@ export default function Settings() {
             </span>
             <ChevronRight size={16} className="text-gray-300 shrink-0" />
           </button>
+        </div>
+
+        {/* Stats Display */}
+        <p className="px-5 pt-5 pb-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('statsDisplaySection')}</p>
+        <div className="mx-4 bg-white rounded-2xl shadow-sm overflow-hidden">
+          {([
+            { key: 'overview' as StatsTabKey, label: t('statsDisplayOverview') },
+            { key: 'daily'    as StatsTabKey, label: t('statsDisplayDaily') },
+            { key: 'category' as StatsTabKey, label: t('statsDisplayCategory') },
+            { key: 'extra'    as StatsTabKey, label: t('statsDisplayExtra') },
+          ]).map(({ key, label }, i, arr) => (
+            <div key={key}>
+              <button
+                onClick={() => toggleStatsTab(key)}
+                className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50 text-left"
+              >
+                <span className="flex-1 text-sm text-gray-800">{label}</span>
+                <div className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${statsDisplay[key] ? 'bg-[#e53935]' : 'bg-gray-200'}`}>
+                  <div className={`absolute top-0.5 h-5 w-5 bg-white rounded-full shadow transition-all ${statsDisplay[key] ? 'left-5' : 'left-0.5'}`} />
+                </div>
+              </button>
+              {i < arr.length - 1 && <div className="border-t border-gray-50 ml-4" />}
+            </div>
+          ))}
         </div>
 
         {/* Account Security */}

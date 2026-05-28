@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { X, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -55,6 +55,8 @@ export default function AddTransaction() {
   const [currency, setCurrency] = useState<Currency>((editTx?.currency as Currency) ?? effectiveDefaultCurrency)
   const [submitting, setSubmitting] = useState(false)
   const [showCurrencyPicker, setShowCPicker] = useState(false)
+  const [pickerStyle, setPickerStyle] = useState<React.CSSProperties>({})
+  const currencyBtnRef = useRef<HTMLButtonElement>(null)
   const [toast, setToast] = useState('')
 
   // Date quick-select
@@ -179,6 +181,17 @@ export default function AddTransaction() {
     }
   }
 
+  function openCurrencyPicker() {
+    const rect = currencyBtnRef.current?.getBoundingClientRect()
+    if (rect) {
+      setPickerStyle({
+        right: window.innerWidth - rect.right,
+        bottom: window.innerHeight - rect.top + 4,
+      })
+    }
+    setShowCPicker(v => !v)
+  }
+
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -271,13 +284,19 @@ export default function AddTransaction() {
               </button>
             ))}
             {/* Currency picker — inline with date buttons */}
-            <div className="relative shrink-0 ml-1">
-              <button onClick={() => setShowCPicker(v => !v)}
+            <div className="shrink-0 ml-1">
+              <button ref={currencyBtnRef} onClick={openCurrencyPicker}
                 className="flex items-center gap-0.5 px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium whitespace-nowrap">
                 {currency}<ChevronDown size={12} className="text-gray-400" />
               </button>
-              {showCurrencyPicker && (
-                <div className="anim-rise-fade absolute right-0 bottom-full mb-1 bg-white border border-gray-100 rounded-xl shadow-lg z-20 min-w-[80px] max-h-[180px] overflow-y-auto">
+            </div>
+            {showCurrencyPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowCPicker(false)} />
+                <div
+                  className="fixed bg-white border border-gray-100 rounded-xl shadow-lg z-50 min-w-[80px] max-h-[180px] overflow-y-auto"
+                  style={pickerStyle}
+                >
                   {SUPPORTED_CURRENCIES.map(c => (
                     <button key={c} onClick={() => { setCurrency(c); setShowCPicker(false) }}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
@@ -287,8 +306,8 @@ export default function AddTransaction() {
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
           {/* Custom date input — only shown when "其他/Other" is active */}
           {dateMode === 'other' && (

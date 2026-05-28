@@ -135,14 +135,15 @@ const { user } = useAuth()
   }
 
   // ── totals (always full month, unaffected by filter) ──
-  const { expenseTotal, incomeTotal } = transactions.reduce(
+  const { expenseTotal, incomeTotal, transferTotal } = transactions.reduce(
     (acc, tx) => {
       const v = convertTx(tx)
-      if (tx.type === 'expense') acc.expenseTotal += v
-      if (tx.type === 'income')  acc.incomeTotal  += v
+      if (tx.type === 'expense')  acc.expenseTotal  += v
+      if (tx.type === 'income')   acc.incomeTotal   += v
+      if (tx.type === 'transfer') acc.transferTotal += v
       return acc
     },
-    { expenseTotal: 0, incomeTotal: 0 },
+    { expenseTotal: 0, incomeTotal: 0, transferTotal: 0 },
   )
   const balance = incomeTotal - expenseTotal
   const symbol  = CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency
@@ -299,6 +300,14 @@ const { user } = useAuth()
             </p>
           </div>
         </div>
+
+        {/* Transfer summary — only when present, kept subtle and outside the main 3-column layout */}
+        {transferTotal > 0 && (
+          <div className="mt-2 flex items-baseline gap-2 text-xs text-white/70">
+            <span>{t('transfer')}</span>
+            <span className="font-medium text-white/90">{symbol} {fmt(transferTotal)}</span>
+          </div>
+        )}
 
         {/* Budget bar */}
         {totalBudget && !ratesLoading && (() => {

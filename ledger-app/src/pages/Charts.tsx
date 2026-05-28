@@ -142,6 +142,7 @@ export default function Charts() {
 
   // ── Tab 2: Daily ──────────────────────────────────────────────────────
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [excludeOutliers, setExcludeOutliers] = useState(false)
 
   const dailyData = useMemo(() => {
     const days = new Date(year, month, 0).getDate()
@@ -154,6 +155,31 @@ export default function Charts() {
     return arr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyTxs])
+
+  // IQR-based outlier threshold for the daily chart. Only days with expense > 0
+  // contribute to the quartile calculation. With fewer than 4 active days we
+  // can't compute a meaningful IQR — return Infinity so nothing is filtered.
+  const outlierThreshold = useMemo(() => {
+    const positives = dailyData.filter(d => d.expense > 0).map(d => d.expense).sort((a, b) => a - b)
+    if (positives.length < 4) return Infinity
+    const q1 = positives[Math.floor(positives.length * 0.25)]
+    const q3 = positives[Math.floor(positives.length * 0.75)]
+    const iqr = q3 - q1
+    return iqr > 0 ? q3 + 1.5 * iqr : Infinity
+  }, [dailyData])
+
+  const outlierDays = useMemo(
+    () => dailyData.filter(d => d.expense > outlierThreshold).map(d => d.day),
+    [dailyData, outlierThreshold],
+  )
+  const hasOutliers = outlierDays.length > 0
+
+  // Bar chart uses filtered data when the toggle is on (outlier days get expense=0
+  // → bar disappears, but the slot is preserved so other days stay readable).
+  const dailyChartDisplayData = useMemo(() => {
+    if (!excludeOutliers || !hasOutliers) return dailyData
+    return dailyData.map(d => d.expense > outlierThreshold ? { ...d, expense: 0 } : d)
+  }, [dailyData, excludeOutliers, outlierThreshold, hasOutliers])
 
   const dayTxs = useMemo(() => {
     if (selectedDay === null) return []
@@ -285,11 +311,11 @@ export default function Charts() {
   }
 
   const dailyChartData = {
-    labels: dailyData.map(d => String(d.day)),
+    labels: dailyChartDisplayData.map(d => String(d.day)),
     datasets: [{
       label: t('expense'),
-      data: dailyData.map(d => d.expense),
-      backgroundColor: dailyData.map(d => d.day === selectedDay ? '#b71c1c' : RED),
+      data: dailyChartDisplayData.map(d => d.expense),
+      backgroundColor: dailyChartDisplayData.map(d => d.day === selectedDay ? '#b71c1c' : RED),
       borderRadius: 3,
       barPercentage: 0.8,
     }],
@@ -499,9 +525,31 @@ export default function Charts() {
               </div>
             ) : (
               <>
+                {/* Outlier toggle (only visible when outliers exist) */}
+                {hasOutliers && (
+                  <div className="flex items-center justify-between -mt-1 mb-2">
+                    <p className="text-xs text-gray-400">
+                      {excludeOutliers
+                        ? t('excludedDaysHint', {
+                            n: outlierDays.length,
+                            threshold: `${symbol} ${fmt(outlierThreshold)}`,
+                          })
+                        : ' '}
+                    </p>
+                    <button onClick={() => setExcludeOutliers(v => !v)}
+                      className={`text-xs px-2 py-0.5 rounded-md transition-colors ${
+                        excludeOutliers
+                          ? 'bg-[#e53935] text-white'
+                          : 'bg-gray-100 text-gray-500 active:bg-gray-200'
+                      }`}>
+                      {t('excludeOutliersBtn')}
+                    </button>
+                  </div>
+                )}
+
                 <div className="h-52 mb-2">
                   <Bar
-                    key={lang}
+                    key={`${lang}-${excludeOutliers}`}
                     data={dailyChartData}
                     options={{
                       ...barBase,
@@ -557,29 +605,6 @@ export default function Charts() {
                   </div>
                 )}
 
-                {/* Day list — read-only visualization, day selection happens on the bar chart */}
-                <div className="space-y-1.5 pt-2 border-t border-gray-50">
-                  {(() => {
-                    const maxExp = Math.max(...dailyData.map(d => d.expense), 0.001)
-                    return dailyData.filter(d => d.expense > 0).map(d => (
-                      <div key={d.day}
-                        className={`flex items-center gap-2 px-1 py-0.5 rounded-md ${
-                          selectedDay === d.day ? 'bg-red-50' : ''
-                        }`}>
-                        <span className="text-xs text-gray-400 w-7 shrink-0 text-right">
-                          {lang === 'zh' ? `${d.day}日` : `${d.day}`}
-                        </span>
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-[#e53935] transition-all"
-                            style={{ width: `${(d.expense / maxExp) * 100}%` }} />
-                        </div>
-                        <span className="text-sm font-medium text-gray-700 w-24 text-right shrink-0">
-                          {symbol} {fmt(d.expense)}
-                        </span>
-                      </div>
-                    ))
-                  })()}
-                </div>
               </>
             )}
           </div>

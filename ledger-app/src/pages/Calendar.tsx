@@ -7,6 +7,7 @@ import { useCategories } from '../hooks/useCategories'
 import { CURRENCY_SYMBOLS } from '../types'
 import type { Currency, TxDetail } from '../types'
 import type { TranslationKey } from '../lib/i18n'
+import TransactionSheet from '../components/TransactionSheet'
 
 function localDateStr(d: Date = new Date()): string {
   const y = d.getFullYear()
@@ -94,21 +95,29 @@ export default function Calendar() {
   const loading = txLoading
 
   // ── aggregate by date ──
-  type DaySummary = { expense: number; income: number; txList: TxDetail[] }
+  type DaySummary = { expense: number; income: number; transfer: number; txList: TxDetail[] }
   const byDate: Record<string, DaySummary> = {}
   for (const tx of transactions) {
-    if (!byDate[tx.date]) byDate[tx.date] = { expense: 0, income: 0, txList: [] }
+    if (!byDate[tx.date]) byDate[tx.date] = { expense: 0, income: 0, transfer: 0, txList: [] }
     const v = convertTx(tx)
-    if (tx.type === 'expense') byDate[tx.date].expense += v
-    if (tx.type === 'income')  byDate[tx.date].income  += v
+    if (tx.type === 'expense')  byDate[tx.date].expense  += v
+    if (tx.type === 'income')   byDate[tx.date].income   += v
+    if (tx.type === 'transfer') byDate[tx.date].transfer += v
     byDate[tx.date].txList.push(tx)
   }
 
   const symbol = CURRENCY_SYMBOLS[displayCurrency] ?? displayCurrency
+  const monthTransferTotal = Object.values(byDate).reduce((s, d) => s + d.transfer, 0)
 
   // ── selected day sheet ──
   const [selectedDate, setSelectedDate] = useState<string | null>(localDateStr(now))
   const selectedSummary = selectedDate ? byDate[selectedDate] : null
+
+  // ── transaction detail (edit/delete) ──
+  const [selectedTx, setSelectedTx] = useState<TxDetail | null>(null)
+  function handleDeleted(_id: string) {
+    /* useTransactions().remove 已经更新本地状态，TransactionSheet 自己会关 */
+  }
 
   const todayStr = localDateStr(now)
   const calDays  = buildCalendarDays(year, month)
@@ -208,6 +217,13 @@ export default function Calendar() {
                 </div>
               ))}
             </div>
+            {/* Transfer row (only shown if there are transfers; doesn't disturb the 3-col grid above) */}
+            {monthTransferTotal > 0 && (
+              <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-xs text-gray-400">{t('transfer')}</span>
+                <span className="text-xs font-medium text-blue-500">{symbol} {fmt(monthTransferTotal)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -226,12 +242,15 @@ export default function Calendar() {
                   {t(`weekday${new Date(selectedDate + 'T00:00:00').getDay()}` as TranslationKey)}
                 </span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap justify-end">
                 {selectedSummary && selectedSummary.expense > 0 && (
                   <span className="text-xs text-red-500">{t('expense')} {symbol} {fmt(selectedSummary.expense)}</span>
                 )}
                 {selectedSummary && selectedSummary.income > 0 && (
                   <span className="text-xs text-green-500">{t('income')} {symbol} {fmt(selectedSummary.income)}</span>
+                )}
+                {selectedSummary && selectedSummary.transfer > 0 && (
+                  <span className="text-xs text-blue-500">{t('transfer')} {symbol} {fmt(selectedSummary.transfer)}</span>
                 )}
               </div>
             </div>
@@ -249,7 +268,9 @@ export default function Calendar() {
                 const isIncome  = tx.type === 'income'
                 const origSymbol = CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency
                 return (
-                  <div key={tx.id} className="flex items-center px-4 py-3 border-b border-gray-50 last:border-0">
+                  <button key={tx.id}
+                    onClick={() => setSelectedTx(tx)}
+                    className="w-full flex items-center px-4 py-3 border-b border-gray-50 last:border-0 active:bg-gray-50 text-left transition-colors">
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl shrink-0 mr-3">
                       {tx.categories?.icon ?? '📦'}
                     </div>
@@ -271,13 +292,23 @@ export default function Calendar() {
                         <p className="text-[10px] text-gray-400">{origSymbol} {fmt(tx.amount)}</p>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })
             )}
           </div>
         )}
       </div>
+
+      {/* Transaction detail sheet — edit / delete */}
+      {selectedTx && (
+        <TransactionSheet
+          tx={selectedTx}
+          displayCurrency={displayCurrency}
+          onClose={() => setSelectedTx(null)}
+          onDeleted={handleDeleted}
+        />
+      )}
     </div>
   )
 }

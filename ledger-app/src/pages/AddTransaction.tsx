@@ -54,6 +54,11 @@ export default function AddTransaction() {
   const [date, setDate]         = useState(editTx?.date ?? localDateStr())
   const [note, setNote]         = useState(editTx?.description ?? '')
   const [currency, setCurrency] = useState<Currency>((editTx?.currency as Currency) ?? effectiveDefaultCurrency)
+  // 转账方向：'in'=转入加钱(+), 'out'=转出扣钱(-)。仅 type='transfer' 时有意义。
+  // 编辑模式：从 editTx.direction 拿，旧数据 null 视为 'in'（兼容 + 行为）。
+  const [transferDir, setTransferDir] = useState<'in' | 'out'>(
+    (editTx?.direction as 'in' | 'out') ?? 'in',
+  )
   const [submitting, setSubmitting] = useState(false)
   const [showCurrencyPicker, setShowCPicker] = useState(false)
   const [pickerStyle, setPickerStyle] = useState<React.CSSProperties>({})
@@ -187,6 +192,8 @@ export default function AddTransaction() {
       category_id: categoryId,
       description: note.trim() || null, date,
       exchange_rate,
+      // 仅 transfer 写 direction，其它类型一律 null（useTransactions 也会再兜底一次）
+      direction: type === 'transfer' ? transferDir : null,
     }
 
     // 写操作走本地 outbox：UI 立刻更新，背景同步到 Supabase。离线时
@@ -242,6 +249,28 @@ export default function AddTransaction() {
           </button>
         ))}
       </div>
+
+      {/* Transfer direction sub-row — only when type=transfer */}
+      {type === 'transfer' && (
+        <div className="flex items-center justify-center gap-1 px-4 py-2 border-b border-gray-100 bg-gray-50">
+          {([
+            { v: 'in'  as const, label: t('transferIn'),  prefix: '+' },
+            { v: 'out' as const, label: t('transferOut'), prefix: '−' },
+          ]).map(({ v, label, prefix }) => (
+            <button key={v}
+              type="button"
+              onClick={() => setTransferDir(v)}
+              className={`flex-1 max-w-[160px] py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                transferDir === v
+                  ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                  : 'bg-white border-gray-200 text-gray-500'
+              }`}
+            >
+              {prefix} {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Content area — fixed height, no outer scroll */}
       <div className="flex-1 overflow-hidden flex flex-col">

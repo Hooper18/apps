@@ -305,6 +305,7 @@ export default function Charts() {
           id: tx.id, type: tx.type, amount: tx.amount, currency: tx.currency,
           description: tx.description, date: tx.date, category_id: tx.category_id,
           exchange_rate: tx.exchange_rate,
+          direction: tx.direction,
           categories: c ? { name: c.name, icon: c.icon } : null,
         } as TxDetail
       })
@@ -319,15 +320,22 @@ export default function Charts() {
   }, [allTxs, year, month])
 
   const transferStats = useMemo(() => {
-    const total = monthlyTransferTxs.reduce(
-      (s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate),
-      0,
-    )
+    // 拆分 in/out 维度——老数据 direction=null 视为 'in'（与 Home/Calendar 一致）
+    const isOut = (tx: TxDetail) => tx.direction === 'out'
+    let totalIn = 0
+    let totalOut = 0
+    for (const tx of monthlyTransferTxs) {
+      const v = cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+      if (isOut(tx)) totalOut += v
+      else totalIn += v
+    }
+    const total = totalIn + totalOut  // 流水"总规模"
+    const net   = totalIn - totalOut  // 实际净流入
     const count = monthlyTransferTxs.length
     const days = new Date(year, month, 0).getDate()
     const avgDaily = total / days
 
-    // 类目分布（最多 4 个 slot：转账 / 还款 / 存款 + 未分类兜底）
+    // 类目分布（按类目维度，不区分 in/out；类目本身就承载语义如"还款"=多半 out）
     const catMap: Record<string, { name: string; icon: string; total: number; count: number }> = {}
     for (const tx of monthlyTransferTxs) {
       const key = tx.category_id
@@ -344,21 +352,24 @@ export default function Charts() {
     }
     const byCategory = Object.values(catMap).sort((a, b) => b.total - a.total)
 
-    // 每日柱状
-    const dailyArr = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0 }))
+    // 每日柱状：in 蓝、out 红，分两个 dataset 同 day 并排
+    const dailyIn  = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0 }))
+    const dailyOut = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0 }))
     for (const tx of monthlyTransferTxs) {
       const d = parseInt(tx.date.slice(8, 10))
-      dailyArr[d - 1].amount += cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+      const v = cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+      if (isOut(tx)) dailyOut[d - 1].amount += v
+      else dailyIn[d - 1].amount += v
     }
 
-    // 环比上月
+    // 环比上月（按总规模比较，跟既有"环比"语义一致；老数据无 direction 时整月按 in 统计）
     const prevTotal = prevMonthTransferTxs.reduce(
       (s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate),
       0,
     )
     const delta = prevTotal > 0 ? ((total - prevTotal) / prevTotal * 100) : null
 
-    return { total, count, avgDaily, byCategory, dailyArr, prevTotal, delta }
+    return { total, totalIn, totalOut, net, count, avgDaily, byCategory, dailyIn, dailyOut, prevTotal, delta }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyTransferTxs, prevMonthTransferTxs, year, month, t])
 
@@ -374,14 +385,23 @@ export default function Charts() {
   }
 
   const transferDailyChartData = {
-    labels: transferStats.dailyArr.map(d => String(d.day)),
-    datasets: [{
-      label: t('momTransfer'),
-      data: transferStats.dailyArr.map(d => d.amount),
-      backgroundColor: BLUE,
-      borderRadius: 3,
-      barPercentage: 0.8,
-    }],
+    labels: transferStats.dailyIn.map(d => String(d.day)),
+    datasets: [
+      {
+        label: t('transferIn'),
+        data: transferStats.dailyIn.map(d => d.amount),
+        backgroundColor: BLUE,
+        borderRadius: 3,
+        barPercentage: 0.8,
+      },
+      {
+        label: t('transferOut'),
+        data: transferStats.dailyOut.map(d => d.amount),
+        backgroundColor: RED,
+        borderRadius: 3,
+        barPercentage: 0.8,
+      },
+    ],
   }
 
   const transferPieOptions = {
@@ -1043,24 +1063,30 @@ export default function Charts() {
               ) : (
                 <div className="space-y-3">
 
-                  {/* Summary cards */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Summary cards — 4 列：转入 / 转出 / 净额 / 笔数 */}
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-xs text-gray-400 mb-1">{t('transferTotal')}</p>
+                      <p className="text-xs text-gray-400 mb-1">{t('transferIn')}</p>
                       <p className="text-sm font-semibold truncate" style={{ color: BLUE }}>
-                        {symbol} {fmt(transferStats.total)}
+                        +{symbol} {fmt(transferStats.totalIn)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">{t('transferOut')}</p>
+                      <p className="text-sm font-semibold truncate text-[#e53935]">
+                        -{symbol} {fmt(transferStats.totalOut)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">{t('transferNet')}</p>
+                      <p className={`text-sm font-semibold truncate ${transferStats.net >= 0 ? 'text-gray-800' : 'text-[#e53935]'}`}>
+                        {transferStats.net >= 0 ? '+' : '-'}{symbol} {fmt(Math.abs(transferStats.net))}
                       </p>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">{t('transferCount')}</p>
                       <p className="text-sm font-semibold text-gray-800">
                         {transferStats.count}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-xs text-gray-400 mb-1">{t('transferAvgDaily')}</p>
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {symbol} {fmt(transferStats.avgDaily)}
                       </p>
                     </div>
                   </div>

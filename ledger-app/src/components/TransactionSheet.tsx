@@ -37,6 +37,10 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
   const converted  = convertTo(tx.amount, tx.currency)
   const isExpense  = tx.type === 'expense'
   const isIncome   = tx.type === 'income'
+  const isTransfer = tx.type === 'transfer'
+  const isTransferOut = isTransfer && tx.direction === 'out'
+  // 转账原本无前缀，加入 in/out 之后：'in' 显示 +、'out' 显示 −
+  const transferPrefix = isTransferOut ? '-' : '+'
 
   const typeLabel = tx.type === 'expense' ? t('expense') : tx.type === 'income' ? t('income') : t('transfer')
 
@@ -79,7 +83,7 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
             </div>
             <p className="text-sm text-gray-500 mb-1">{tx.categories?.name ?? t('uncategorized')}</p>
             <p className={`text-3xl font-bold ${isExpense ? 'text-red-500' : isIncome ? 'text-green-500' : 'text-blue-500'}`}>
-              {isExpense ? '-' : isIncome ? '+' : ''}{dispSymbol} {fmt(converted)}
+              {isExpense ? '-' : isIncome ? '+' : transferPrefix}{dispSymbol} {fmt(converted)}
             </p>
             {tx.currency !== displayCurrency && (
               <p className="text-xs text-gray-400 mt-1">{t('originalLabel')}{origSymbol} {fmt(tx.amount)}</p>

@@ -15,6 +15,8 @@ const zh = {
   expense: '支出',
   income: '收入',
   transfer: '转账',
+  transferIn: '转入',
+  transferOut: '转出',
   uncategorized: '未分类',
   balance: '结余',
 
@@ -98,6 +100,7 @@ const zh = {
   transferTotal: '本月转账',
   transferCount: '转账笔数',
   transferAvgDaily: '日均转账',
+  transferNet: '净额',
   transferByCategory: '类目分布',
   transferDaily: '每日转账',
   momTransfer: '转账',
@@ -286,6 +289,8 @@ const en: typeof zh = {
   expense: 'Expense',
   income: 'Income',
   transfer: 'Transfer',
+  transferIn: 'In',
+  transferOut: 'Out',
   uncategorized: 'Uncategorized',
   balance: 'Balance',
 
@@ -360,6 +365,7 @@ const en: typeof zh = {
   transferTotal: 'This Month',
   transferCount: 'Count',
   transferAvgDaily: 'Avg Daily',
+  transferNet: 'Net',
   transferByCategory: 'By Category',
   transferDaily: 'Daily Transfers',
   momTransfer: 'Transfer',

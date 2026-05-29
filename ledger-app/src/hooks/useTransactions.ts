@@ -99,6 +99,8 @@ export function useTransactions() {
         description: input.description ?? null,
         date: input.date,
         exchange_rate: input.exchange_rate ?? null,
+        // 仅 type='transfer' 时有意义；其它类型存 null 不参与展示。
+        direction: input.type === 'transfer' ? (input.direction ?? 'in') : null,
         created_at: now,
         updated_at: now,
       }

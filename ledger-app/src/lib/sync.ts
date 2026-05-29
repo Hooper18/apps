@@ -164,20 +164,26 @@ export async function pullAll(): Promise<void> {
 /**
  * 一次完整的同步：先 push 再 pull。
  * 同一时刻只允许一个 sync 在跑，避免并发跑两次 push 把同一条记录提交两次。
+ *
+ * 注：清 inFlight 必须放在 IIFE 外的 .finally() 链上，**不能** 写成 IIFE 内
+ * try/finally。原因：离线分支整个 IIFE 体里没有 await，会同步跑完，finally 里
+ * `inFlight = null` 的赋值发生在外层 `inFlight = <iife>` 赋值之前；结果离线
+ * 一跑完 inFlight 反被这个已 resolved 的 Promise 卡住，下次 sync 直接命中 if
+ * (inFlight) return 永远不再推送。
  */
 export async function sync(): Promise<void> {
   if (inFlight) return inFlight
-  inFlight = (async () => {
-    try {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        // 离线：跳过 push（fetch 会被 fast-abort），只触发本地缓存读取
-        return
-      }
-      await pushOutbox()
-      await pullAll()
-    } finally {
-      inFlight = null
+  const work = (async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // 离线：跳过 push（fetch 会被 fast-abort），只触发本地缓存读取
+      return
     }
+    await pushOutbox()
+    await pullAll()
   })()
-  return inFlight
+  inFlight = work
+  work.finally(() => {
+    if (inFlight === work) inFlight = null
+  })
+  return work
 }

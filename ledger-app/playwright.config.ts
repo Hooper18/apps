@@ -17,7 +17,9 @@ export default defineConfig({
     { name: 'chromium', use: devices['Desktop Chrome'] },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 5174 --strictPort',
+    command: process.env.CI
+      ? 'npm run preview -- --port 5174 --strictPort'
+      : 'npm run build && npm run preview -- --port 5174 --strictPort',
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

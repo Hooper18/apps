@@ -19,7 +19,12 @@ export default defineConfig({
     { name: 'chromium', use: devices['Desktop Chrome'] },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 5174 --strictPort',
+    // CI 流程已在 Build step 跑过 npm run build，这里只起 preview；本地若没建
+    // 过 dist，preview 会立刻失败，提示先 `npm run build`。
+    // 想一行直接跑 E2E：CI=1 npm run build && npm run test:e2e
+    command: process.env.CI
+      ? 'npm run preview -- --port 5174 --strictPort'
+      : 'npm run build && npm run preview -- --port 5174 --strictPort',
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

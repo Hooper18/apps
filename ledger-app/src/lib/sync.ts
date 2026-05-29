@@ -90,7 +90,7 @@ async function flushOne(entry: OutboxEntry): Promise<boolean> {
   }
 }
 
-function classifyError(err: { message?: string; code?: string }): boolean {
+function classifyError(err: { message?: string; code?: string; details?: string; hint?: string }): boolean {
   // PostgREST 网络层错误一般有 message "Failed to fetch"；这种保留重试。
   // 业务错误（PGRST 系列、约束违反等）则视为已确认失败，直接出队避免堵后续，
   // 同时弹一个 toast 让用户感知（这条数据没存上）。
@@ -98,6 +98,9 @@ function classifyError(err: { message?: string; code?: string }): boolean {
   if (msg.includes('failed to fetch') || msg.includes('network')) {
     return false
   }
+  // 把完整错误丢进 console，让用户在 DevTools 看具体哪个约束失败（PG 的
+  // check_violation 23514 会带 constraint name；FK 23503 会带表名等）。
+  console.error('[sync] outbox entry rejected by supabase', err)
   const reason = err.code ?? err.message ?? '未知错误'
   showToast(`同步被拒：${reason}`, { durationMs: 3500 })
   return true

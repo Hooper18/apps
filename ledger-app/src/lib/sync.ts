@@ -102,7 +102,8 @@ function classifyError(err: { message?: string; code?: string; details?: string;
   // check_violation 23514 会带 constraint name；FK 23503 会带表名等）。
   console.error('[sync] outbox entry rejected by supabase', err)
   const reason = err.code ?? err.message ?? '未知错误'
-  showToast(`同步被拒：${reason}`, { durationMs: 3500 })
+  // 6 秒让用户读得清；ToastHost 允许点击提前关。
+  showToast(`同步被拒：${reason}`, { durationMs: 6000 })
   return true
 }
 

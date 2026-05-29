@@ -1,13 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, MapPin, Plus } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import { useSemester } from '../../hooks/useSemester'
 import { useCourses } from '../../hooks/useCourses'
 import { useEvents } from '../../hooks/useEvents'
 import { useIsDesktop } from '../../hooks/useIsDesktop'
-import { useMutationGuard } from '../../hooks/useMutationGuard'
 import EventCard from '../shared/EventCard'
 import EventModal from '../shared/EventModal'
-import NewEventModal from '../shared/NewEventModal'
+import { useNewEventControl } from '../shared/useNewEventControl'
 import DayDetailPanel from './DayDetailPanel'
 import type { Event, Course, WeeklySchedule, EventType } from '../../lib/types'
 import {
@@ -202,13 +201,20 @@ export default function CalendarView() {
     }
   }
   const [editing, setEditing] = useState<Event | null>(null)
-  const [adding, setAdding] = useState(false)
   const [layers, setLayers] = useState<Layers>({
     showEvents: true,
     showCourses: true,
   })
   const [weekCursor, setWeekCursor] = useState<Date>(new Date())
-  const guard = useMutationGuard()
+
+  // 单一新建事件入口：桌面 header 按钮（month/week 顶栏内嵌）+ 移动 FAB +
+  // 弹窗。defaultDate = selected 让新建对话框天然跟当前日历选中日期联动。
+  const newEvent = useNewEventControl({
+    semesterId: semester?.id ?? '',
+    courses,
+    defaultDate: selected,
+    onSaved: reload,
+  })
 
   const courseMap = useMemo(
     () => Object.fromEntries(courses.map((c) => [c.id, c])),
@@ -260,6 +266,7 @@ export default function CalendarView() {
         <div className="p-3 border-b border-border flex flex-row flex-wrap items-center justify-center gap-2">
           <ViewSwitcher mode={mode} onChange={setMode} />
           <LayerToggle layers={layers} onChange={setLayers} />
+          <span className="hidden md:inline-block">{newEvent.headerButton}</span>
         </div>
         <DayView
           date={selected}
@@ -279,6 +286,8 @@ export default function CalendarView() {
           onClose={() => setEditing(null)}
           onSaved={reload}
         />
+        {newEvent.fab}
+        {newEvent.modal}
       </div>
     )
   }
@@ -304,6 +313,7 @@ export default function CalendarView() {
             setSelected(iso)
             setMode('day')
           }}
+          addButton={newEvent.headerButton}
         />
         <EventModal
           event={editing}
@@ -311,6 +321,8 @@ export default function CalendarView() {
           onClose={() => setEditing(null)}
           onSaved={reload}
         />
+        {newEvent.fab}
+        {newEvent.modal}
       </div>
     )
   }
@@ -357,6 +369,7 @@ export default function CalendarView() {
             >
               {t('calendar.today')}
             </button>
+            <span className="hidden md:inline-block">{newEvent.headerButton}</span>
           </div>
         </div>
         {/* Mobile-only switcher + layer toggles below the title row. Merged
@@ -434,30 +447,8 @@ export default function CalendarView() {
         onSaved={reload}
       />
 
-      {/* Mobile floating "add" button — desktop has DayDetailPanel as the entry point. */}
-      {semester && (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          disabled={guard.disabled}
-          title={guard.title}
-          aria-label={t('calendar.newEvent')}
-          className="md:hidden fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-accent text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus size={24} />
-        </button>
-      )}
-
-      {semester && (
-        <NewEventModal
-          open={adding}
-          defaultDate={selected}
-          semesterId={semester.id}
-          courses={courses}
-          onClose={() => setAdding(false)}
-          onSaved={reload}
-        />
-      )}
+      {newEvent.fab}
+      {newEvent.modal}
     </div>
   )
 }
@@ -901,6 +892,7 @@ interface WeekViewProps {
   mode: Mode
   onModeChange: (m: Mode) => void
   onSelectDate: (iso: string) => void
+  addButton?: ReactNode
 }
 
 function WeekView({
@@ -915,6 +907,7 @@ function WeekView({
   mode,
   onModeChange,
   onSelectDate,
+  addButton,
 }: WeekViewProps) {
   const t = useT()
   const isDesktop = useIsDesktop()
@@ -1019,13 +1012,16 @@ function WeekView({
             <ChevronRight size={16} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => onCursorChange(new Date())}
-          className="text-xs font-medium px-3 py-1 rounded-full border border-accent text-accent hover:bg-accent/10 transition-colors"
-        >
-          {t('calendar.thisWeek')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onCursorChange(new Date())}
+            className="text-xs font-medium px-3 py-1 rounded-full border border-accent text-accent hover:bg-accent/10 transition-colors"
+          >
+            {t('calendar.thisWeek')}
+          </button>
+          {addButton && <span className="hidden md:inline-block">{addButton}</span>}
+        </div>
       </div>
 
       {/* Row 2: view-mode switcher + event/course layer toggles. */}

@@ -205,7 +205,6 @@ useEvents.load → events 列表
 - [ ] Widget 点具体条目跳到 `/todo?event=<id>`（需自定义 URL scheme + `@capacitor/app` `appUrlOpen` 监听）
 - [ ] Widget 课程徽章按 `course.color` 着色（需把 color 写进 snapshot）
 - [ ] Widget 显示事件 end_time（需 Java 端读 + 重打 APK）
-- [ ] Calendar 桌面 Header 加新建事件按钮（移动端 FAB 已有，桌面要联动 selected 日期作为 defaultDate）
 - [ ] Phase 2 导入流程的端到端测试（目前只做过手动验证）
 - [ ] Moodle 抓取的会话续期（cookie 过期需重登）
 

@@ -23,14 +23,17 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Le
 
 const RED    = '#e53935'
 const GREEN  = '#43a047'
+const BLUE   = '#1e88e5'  // 转账主题色，跟 TransactionSheet 的 transfer 蓝一致
 const PIE_COLORS = [
   '#e53935','#e91e63','#9c27b0','#673ab7','#3f51b5',
   '#2196f3','#03a9f4','#00bcd4','#009688','#4caf50',
   '#8bc34a','#cddc39','#ffc107','#ff9800','#ff5722',
   '#795548','#9e9e9e','#607d8b',
 ]
+// 转账独立的配色（3 类：转账 / 还款 / 存款 + 兜底未分类），蓝色家族
+const TRANSFER_COLORS = ['#1e88e5', '#5e35b1', '#00897b', '#90a4ae']
 
-type Tab = 'overview' | 'daily' | 'category' | 'extra'
+type Tab = 'overview' | 'daily' | 'category' | 'extra' | 'transfer'
 
 const NOW = new Date()
 
@@ -70,7 +73,7 @@ export default function Charts() {
   }
 
   const statsDisplay = useMemo(() => getStatsDisplay(), [])
-  const firstVisibleTab = (['overview', 'daily', 'category', 'extra'] as Tab[]).find(k => statsDisplay[k] !== false) ?? 'overview'
+  const firstVisibleTab = (['overview', 'daily', 'category', 'extra', 'transfer'] as Tab[]).find(k => statsDisplay[k] !== false) ?? 'overview'
   const [tab, setTab] = useState<Tab>(firstVisibleTab)
 
   // Shared month navigation (daily / category / extra)
@@ -92,6 +95,7 @@ export default function Charts() {
   const dailyTitle    = lang === 'zh' ? `${monthYearLabel}${t('tabDaily')}`    : `${t('tabDaily')} · ${monthYearLabel}`
   const categoryTitle = lang === 'zh' ? `${monthYearLabel}${t('tabCategory')}` : `${t('tabCategory')} · ${monthYearLabel}`
   const extraTitle    = lang === 'zh' ? `${monthYearLabel}${t('tabExtra')}`    : `${t('tabExtra')} · ${monthYearLabel}`
+  const transferTitle = lang === 'zh' ? `${monthYearLabel}${t('tabTransfer')}` : `${t('tabTransfer')} · ${monthYearLabel}`
 
   // ── Tab 1: Overview ────────────────────────────────────────────────────
   const [overviewRange, setOverviewRange] = useState<6 | 12>(6)
@@ -286,6 +290,117 @@ export default function Charts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyTxs, prevMonthTxs, year, month])
 
+  // ── Tab 5: Transfer ───────────────────────────────────────────────────
+  // 完全独立于上面 4 个 tab 的数据流：另起一个 monthlyTransferTxs 派生，
+  // 不混进 monthlyTxs 也不入 overview——保证现有支出/收入统计字节不变。
+  const monthlyTransferTxs: TxDetail[] = useMemo(() => {
+    const start = monthStart(year, month)
+    const end   = monthEnd(year, month)
+    const catMap = new Map(categories.map(c => [c.id, c]))
+    return allTxs
+      .filter(tx => tx.date >= start && tx.date < end && tx.type === 'transfer')
+      .map(tx => {
+        const c = catMap.get(tx.category_id)
+        return {
+          id: tx.id, type: tx.type, amount: tx.amount, currency: tx.currency,
+          description: tx.description, date: tx.date, category_id: tx.category_id,
+          exchange_rate: tx.exchange_rate,
+          categories: c ? { name: c.name, icon: c.icon } : null,
+        } as TxDetail
+      })
+  }, [allTxs, categories, year, month])
+
+  const prevMonthTransferTxs = useMemo(() => {
+    const prevMonth = month === 1 ? 12 : month - 1
+    const prevYear  = month === 1 ? year - 1 : year
+    const start = monthStart(prevYear, prevMonth)
+    const end   = monthEnd(prevYear, prevMonth)
+    return allTxs.filter(tx => tx.date >= start && tx.date < end && tx.type === 'transfer')
+  }, [allTxs, year, month])
+
+  const transferStats = useMemo(() => {
+    const total = monthlyTransferTxs.reduce(
+      (s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate),
+      0,
+    )
+    const count = monthlyTransferTxs.length
+    const days = new Date(year, month, 0).getDate()
+    const avgDaily = total / days
+
+    // 类目分布（最多 4 个 slot：转账 / 还款 / 存款 + 未分类兜底）
+    const catMap: Record<string, { name: string; icon: string; total: number; count: number }> = {}
+    for (const tx of monthlyTransferTxs) {
+      const key = tx.category_id
+      if (!catMap[key]) {
+        catMap[key] = {
+          name: tx.categories?.name ?? t('uncategorized'),
+          icon: tx.categories?.icon ?? '📦',
+          total: 0,
+          count: 0,
+        }
+      }
+      catMap[key].total += cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+      catMap[key].count += 1
+    }
+    const byCategory = Object.values(catMap).sort((a, b) => b.total - a.total)
+
+    // 每日柱状
+    const dailyArr = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0 }))
+    for (const tx of monthlyTransferTxs) {
+      const d = parseInt(tx.date.slice(8, 10))
+      dailyArr[d - 1].amount += cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+    }
+
+    // 环比上月
+    const prevTotal = prevMonthTransferTxs.reduce(
+      (s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate),
+      0,
+    )
+    const delta = prevTotal > 0 ? ((total - prevTotal) / prevTotal * 100) : null
+
+    return { total, count, avgDaily, byCategory, dailyArr, prevTotal, delta }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlyTransferTxs, prevMonthTransferTxs, year, month, t])
+
+  // 转账 tab 的图表配置
+  const transferPieData = {
+    labels: transferStats.byCategory.map(c => `${c.icon} ${c.name}`),
+    datasets: [{
+      data: transferStats.byCategory.map(c => c.total),
+      backgroundColor: transferStats.byCategory.map((_, i) => TRANSFER_COLORS[i % TRANSFER_COLORS.length]),
+      borderWidth: 2,
+      borderColor: '#fff',
+    }],
+  }
+
+  const transferDailyChartData = {
+    labels: transferStats.dailyArr.map(d => String(d.day)),
+    datasets: [{
+      label: t('momTransfer'),
+      data: transferStats.dailyArr.map(d => d.amount),
+      backgroundColor: BLUE,
+      borderRadius: 3,
+      barPercentage: 0.8,
+    }],
+  }
+
+  const transferPieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<'pie'>) => {
+            const v = ctx.parsed as number
+            const pct = transferStats.total > 0 ? ((v / transferStats.total) * 100).toFixed(1) : '0'
+            return ` ${symbol} ${fmt(v)} (${pct}%)`
+          },
+        },
+      },
+    },
+  }
+
   // 恩格尔系数等级（联合国标准）
   function engelTier(coef: number): { label: string; color: string } {
     if (coef < 30) return { label: t('engelTier1'), color: '#43a047' }
@@ -402,6 +517,7 @@ export default function Charts() {
     { key: 'daily'    as Tab, label: t('tabDaily') },
     { key: 'category' as Tab, label: t('tabCategory') },
     { key: 'extra'    as Tab, label: t('tabExtra') },
+    { key: 'transfer' as Tab, label: t('tabTransfer') },
   ] as const).filter(item => statsDisplay[item.key] !== false)
 
   const weekdayKeys = ['weekday0','weekday1','weekday2','weekday3','weekday4','weekday5','weekday6'] as const
@@ -905,6 +1021,96 @@ export default function Charts() {
                           : `${t(weekdayKeys[extraStats.maxDow])} has the most spending`}
                       </p>
                     )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Transfer ── */}
+        {tab === 'transfer' && (
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <MonthNav title={transferTitle} />
+
+              {monthlyLoading ? <Spinner /> : monthlyTransferTxs.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-2">
+                  <span className="text-3xl">🔄</span>
+                  <p className="text-sm">{t('noTransferData')}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">{t('transferTotal')}</p>
+                      <p className="text-sm font-semibold truncate" style={{ color: BLUE }}>
+                        {symbol} {fmt(transferStats.total)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">{t('transferCount')}</p>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {transferStats.count}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">{t('transferAvgDaily')}</p>
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {symbol} {fmt(transferStats.avgDaily)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Month-over-month delta */}
+                  {transferStats.delta !== null && (
+                    <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-400">{t('momLabel')}</span>
+                      <span className={`text-sm font-semibold ${transferStats.delta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
+                        {transferStats.delta > 0 ? '+' : ''}{transferStats.delta.toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Category breakdown — pie + legend */}
+                  <div className="pt-2">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">{t('transferByCategory')}</p>
+                    <div className="h-44 mb-3">
+                      <Pie key={`transfer-${lang}-${year}-${month}`} data={transferPieData} options={transferPieOptions} />
+                    </div>
+                    <div className="space-y-2 pt-2 border-t border-gray-50">
+                      {transferStats.byCategory.map((c, i) => {
+                        const pct = transferStats.total > 0 ? (c.total / transferStats.total * 100).toFixed(1) : '0'
+                        const color = TRANSFER_COLORS[i % TRANSFER_COLORS.length]
+                        return (
+                          <div key={c.name} className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: color }} />
+                            <span className="text-sm flex-1 truncate text-gray-700">
+                              {c.icon} {c.name}
+                            </span>
+                            <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{pct}%</span>
+                            <span className="text-sm font-medium text-gray-800 shrink-0 w-24 text-right">
+                              {symbol} {fmt(c.total)}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Daily bar chart */}
+                  <div className="pt-2">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">{t('transferDaily')}</p>
+                    <div className="h-44">
+                      <Bar
+                        key={`transfer-daily-${lang}-${year}-${month}`}
+                        data={transferDailyChartData}
+                        options={{ ...barBase, plugins: { ...barBase.plugins, legend: { display: false } } }}
+                      />
+                    </div>
                   </div>
 
                 </div>

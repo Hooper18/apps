@@ -26,11 +26,15 @@ type ModalType = 'preferred' | 'default' | 'language' | 'changePwd' | 'export' |
 function pad(n: number) { return n.toString().padStart(2, '0') }
 
 // ── Stats display settings ─────────────────────────────────────────────
-export type StatsTabKey = 'overview' | 'daily' | 'category' | 'extra'
+export type StatsTabKey = 'overview' | 'daily' | 'category' | 'extra' | 'transfer'
 const STATS_TABS_KEY = 'ledger:stats_tabs'
 
 export function getStatsDisplay(): Record<StatsTabKey, boolean> {
-  const defaults: Record<StatsTabKey, boolean> = { overview: true, daily: true, category: true, extra: true }
+  // 历史用户的 localStorage 里不会有 transfer 字段，spread defaults 在前
+  // 保证旧值（其它 4 项）尊重用户选择，transfer 默认 true 加入显示。
+  const defaults: Record<StatsTabKey, boolean> = {
+    overview: true, daily: true, category: true, extra: true, transfer: true,
+  }
   try {
     const raw = localStorage.getItem(STATS_TABS_KEY)
     if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Record<StatsTabKey, boolean>>) }
@@ -357,6 +361,7 @@ export default function Settings() {
             { key: 'daily'    as StatsTabKey, label: t('statsDisplayDaily') },
             { key: 'category' as StatsTabKey, label: t('statsDisplayCategory') },
             { key: 'extra'    as StatsTabKey, label: t('statsDisplayExtra') },
+            { key: 'transfer' as StatsTabKey, label: t('statsDisplayTransfer') },
           ]).map(({ key, label }, i, arr) => (
             <div key={key}>
               <button

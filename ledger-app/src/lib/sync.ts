@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import * as outbox from './outbox'
 import type { OutboxEntry } from './outbox'
+import { showToast } from './toast'
 
 // 同步引擎：负责把 outbox 里的本地写操作冲到 Supabase，并在适当时机
 // 让所有数据 hook 重新拉取最新数据。
@@ -91,14 +92,14 @@ async function flushOne(entry: OutboxEntry): Promise<boolean> {
 
 function classifyError(err: { message?: string; code?: string }): boolean {
   // PostgREST 网络层错误一般有 message "Failed to fetch"；这种保留重试。
-  // 业务错误（PGRST 系列、约束违反等）保留 false 让用户感知，但为了不
-  // 死锁队列，这里仍然返回 true 让它出队。错误信息会被吞掉，可后续接 toast。
+  // 业务错误（PGRST 系列、约束违反等）则视为已确认失败，直接出队避免堵后续，
+  // 同时弹一个 toast 让用户感知（这条数据没存上）。
   const msg = (err.message ?? '').toLowerCase()
   if (msg.includes('failed to fetch') || msg.includes('network')) {
     return false
   }
-  // 其它错误视为已确认失败（例如 RLS 拒绝 / 唯一约束冲突），直接出队
-  console.warn('[sync] outbox entry rejected:', err)
+  const reason = err.code ?? err.message ?? '未知错误'
+  showToast(`同步被拒：${reason}`, { durationMs: 3500 })
   return true
 }
 

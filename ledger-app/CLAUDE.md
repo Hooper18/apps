@@ -107,7 +107,12 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 ## 已知坑位
 - `database.types.ts` 是**手写**，未用 `supabase gen types`；改 schema 需手动同步。
 - categories / budgets 无 `updated_at` 列。
-- `src/lib/sync.ts:101` 的 `console.warn` 是**有意观测点**（不是调试残留）：当 outbox 写入被服务端拒绝（RLS / 唯一约束冲突等）时记录，等 toast 接入后再替换。
+
+## 全局 Toast
+- `src/lib/toast.ts`：window event bus（`ledger:toast`），导出 `showToast(message, { durationMs? })` / `subscribeToast(cb)`。
+- `src/components/layout/ToastHost.tsx`：唯一渲染宿主，挂在 `App` 顶层 Provider 内。复用 `.anim-toast` 动画。
+- 用途：**模块代码（非 React 树内）的偶发用户级提示**——目前由 `sync.ts:classifyError` 在 outbox 被服务端业务级拒绝时调用，未来汇率 API、通知权限失败等也走这里。
+- AddTransaction 内部的本地 toast 是**业务反馈**（保存成功 / 校验失败），不走全局通道，保持原状。
 
 ## 历史修复记录（按时间倒序，便于回溯）
 - 全局日期 UTC 偏移修复：用 `localDateStr()` 替代 `toISOString()`，避免 UTC+8 凌晨记账记到昨天

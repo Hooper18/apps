@@ -6,6 +6,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
 import { syncReminder } from './lib/notifications'
 import { migratePetToFruit } from './lib/categoryMigrations'
 import Layout from './components/layout/Layout'
+import ToastHost from './components/layout/ToastHost'
 import Auth from './pages/Auth'
 import Home from './pages/Home'
 // AddTransaction 是 App 最高频的入口，打进主 bundle 避免任何 chunk fetch /
@@ -148,6 +149,7 @@ export default function App() {
         <AuthProvider>
           <CurrencyProvider>
             <AppRoutes />
+            <ToastHost />
           </CurrencyProvider>
         </AuthProvider>
       </LanguageProvider>

@@ -42,7 +42,7 @@ export default function AddTransaction() {
   const { effectiveDefaultCurrency, baseCurrency, rates, recordLastUsedCurrency } = useCurrency()
   const { t } = useLanguage()
   const { transactions, insert: insertTx, update: updateTx } = useTransactions()
-  const { categories: allCats } = useCategories()
+  const { categories: allCats, seedDefaults: seedCategories } = useCategories()
   const { applySort } = useCategorySort()
 
   // Edit mode: location.state.tx is set when navigating from TransactionSheet
@@ -163,13 +163,28 @@ export default function AddTransaction() {
 
     setSubmitting(true)
 
+    // 兜底分类 id 是 buildFallback 给的 '0'/'1'/'2'... 数字串，DB 里 category_id
+    // 是 UUID 列，直推会被 PG 拒（22P02）。这里检测：如果选中的不是真实
+    // UUID（即 allCats 里找不到），先把默认分类一次性 seed 到 DB（前端 UUID
+    // + outbox FIFO，离线也能记），再按 name + type 匹配到真实 id 替换。
+    let categoryId = selectedCategory
+    const selectedIsReal = allCats.some((c) => c.id === selectedCategory)
+    if (!selectedIsReal) {
+      const selectedCat = categories.find((c) => c.id === selectedCategory)
+      if (selectedCat) {
+        const seeded = await seedCategories()
+        const real = seeded.find((c) => c.name === selectedCat.name && c.type === type)
+        if (real) categoryId = real.id
+      }
+    }
+
     const exchange_rate = currency !== baseCurrency
       ? (rates[currency] ?? 1) / (rates[baseCurrency] ?? 1)
       : null
 
     const payload = {
       type, amount: parseFloat(amount), currency,
-      category_id: selectedCategory,
+      category_id: categoryId,
       description: note.trim() || null, date,
       exchange_rate,
     }

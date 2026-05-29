@@ -12,7 +12,8 @@
 //
 // 数据 schema 与 ScheduleWidgetProvider.java 互为镜像，改一边要改另一边。
 import { Capacitor, registerPlugin } from '@capacitor/core'
-import type { Event } from './types'
+import type { Course, Event } from './types'
+import { loadCache } from './dataCache'
 
 interface WidgetSyncPlugin {
   snapshot(data: { json: string }): Promise<void>
@@ -36,6 +37,8 @@ interface WidgetEvent {
   id: string
   title: string
   courseCode: string | null
+  /** 课程颜色 hex（带 # 前缀）；找不到匹配的课程时 null，Java 端会沿用默认灰。 */
+  courseColor: string | null
   date: string // YYYY-MM-DD
   time: string | null // HH:MM
   type: string
@@ -59,6 +62,19 @@ export async function syncWidget(events: Event[]): Promise<void> {
   const todayStr = isoDate(today)
   const horizonStr = isoDate(horizon)
 
+  // 颜色查表：优先 event.course_id → color；失败时退到 extractCourseCode →
+  // code → color。courses 从 useCourses 写入的 dataCache 里读，首次空安装
+  // 时表为空，颜色都是 null，Java 端会沿用默认灰，下一次同步即可恢复。
+  const cachedCourses = loadCache<Course[]>('courses') ?? []
+  const colorById = new Map<string, string>()
+  const colorByCode = new Map<string, string>()
+  for (const c of cachedCourses) {
+    if (c.color) {
+      colorById.set(c.id, c.color)
+      colorByCode.set(c.code, c.color)
+    }
+  }
+
   const filtered = events
     .filter((e) => e.status !== 'completed' && e.status !== 'cancelled')
     .filter((e) => !!e.date && e.date >= todayStr && e.date < horizonStr)
@@ -67,14 +83,22 @@ export async function syncWidget(events: Event[]): Promise<void> {
       return (a.time ?? '').localeCompare(b.time ?? '')
     })
     .slice(0, MAX_EVENTS)
-    .map<WidgetEvent>((e) => ({
-      id: e.id,
-      title: e.title,
-      courseCode: extractCourseCode(e),
-      date: e.date!,
-      time: e.time ? e.time.slice(0, 5) : null,
-      type: e.type,
-    }))
+    .map<WidgetEvent>((e) => {
+      const code = extractCourseCode(e)
+      const color =
+        (e.course_id ? colorById.get(e.course_id) : null) ??
+        (code ? colorByCode.get(code) : null) ??
+        null
+      return {
+        id: e.id,
+        title: e.title,
+        courseCode: code,
+        courseColor: color,
+        date: e.date!,
+        time: e.time ? e.time.slice(0, 5) : null,
+        type: e.type,
+      }
+    })
 
   const snapshot: WidgetSnapshot = {
     updatedAt: Date.now(),

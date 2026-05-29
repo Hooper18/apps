@@ -7,7 +7,10 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -109,11 +112,13 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
                     if (code == null || "null".equals(code) || code.isEmpty()) code = "—";
                     String title = e.optString("title", "");
                     String when = formatWhen(e.optString("date"), e.optString("time", null));
+                    String color = e.optString("courseColor", null);
 
                     views.setViewVisibility(ROW_CONTAINER_IDS[i], View.VISIBLE);
                     views.setTextViewText(ROW_CODE_IDS[i], code);
                     views.setTextViewText(ROW_TITLE_IDS[i], title);
                     views.setTextViewText(ROW_WHEN_IDS[i], when);
+                    applyBadgeTint(views, ROW_CODE_IDS[i], color);
                 } else {
                     views.setViewVisibility(ROW_CONTAINER_IDS[i], View.GONE);
                 }
@@ -164,5 +169,25 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         c.set(Calendar.MINUTE, 0);
         c.set(Calendar.SECOND, 0);
         c.set(Calendar.MILLISECOND, 0);
+    }
+
+    /**
+     * 给徽章 TextView 上一层课程颜色 tint。
+     * - API 31+：RemoteViews.setColorStateList(... setBackgroundTintList)。底图
+     *   是 widget_badge.xml 的不透明灰色圆角，SRC_IN 默认 tint mode 下结果就是
+     *   纯粹的课程颜色矩形，保留圆角。
+     * - API < 31：RemoteViews 不支持 setColorStateList，沿用底图默认灰；不
+     *   降级到 setBackgroundColor 是为了避免丢圆角，宁可不染色也要视觉一致。
+     * - color 为 null / 空 / 解析失败：维持默认灰。
+     */
+    private static void applyBadgeTint(RemoteViews views, int viewId, String color) {
+        if (color == null || color.isEmpty() || "null".equals(color)) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+        try {
+            int c = Color.parseColor(color);
+            views.setColorStateList(viewId, "setBackgroundTintList", ColorStateList.valueOf(c));
+        } catch (IllegalArgumentException ignored) {
+            // 不认识的色值，留默认灰。
+        }
     }
 }

@@ -141,7 +141,7 @@ useEvents.load → events 列表
 
 ### 当前限制（已知非紧迫）
 - **不支持点具体条目跳转**：整体点 widget 只打开 app 到当前路由。点具体某条 DDL 高亮事件需要自定义 URL scheme + `@capacitor/app` 监听 `appUrlOpen`，工作量较大。已在中期待办。
-- **课程徽章颜色固定灰色**：widget 拿不到 courses 列表，无法按课程颜色着色。如要实现需把 `course.color` 也写进 snapshot。
+- **课程徽章颜色**：API 31+ 设备走 `RemoteViews.setColorStateList(...setBackgroundTintList...)` 自动按 `course.color` 上色；API < 31 维持默认灰（RemoteViews 不支持 tint，降级到 setBackgroundColor 会丢圆角，宁可不染）。颜色来源：`widgetSync.ts` 从 `dataCache` 的 courses 快照里查 `course.color`，写进 snapshot 的 `courseColor` 字段。
 - **无 WorkManager 主动刷新**：依赖系统 30 分钟 tick + onUpdate 重算倒计时。如发现"app 关着 24 小时后倒计时不准"再加 WorkManager。
 
 ### 如何验证（首次构建）
@@ -203,7 +203,6 @@ useEvents.load → events 列表
 
 ### 中期
 - [ ] Widget 点具体条目跳到 `/todo?event=<id>`（需自定义 URL scheme + `@capacitor/app` `appUrlOpen` 监听）
-- [ ] Widget 课程徽章按 `course.color` 着色（需把 color 写进 snapshot）
 - [ ] Widget 显示事件 end_time（需 Java 端读 + 重打 APK）
 - [ ] Phase 2 导入流程的端到端测试（目前只做过手动验证）
 - [ ] Moodle 抓取的会话续期（cookie 过期需重登）

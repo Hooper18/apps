@@ -119,6 +119,7 @@ const { user } = useAuth()
           date: t.date,
           category_id: t.category_id,
           exchange_rate: t.exchange_rate,
+          direction: t.direction,
           categories: c ? { name: c.name, icon: c.icon } : null,
         } as TxDetail
       })
@@ -407,7 +408,10 @@ const { user } = useAuth()
                     const converted = convertTo(tx.amount, tx.currency)
                     const isExpense = tx.type === 'expense'
                     const isIncome  = tx.type === 'income'
+                    const isTransferOut = tx.type === 'transfer' && tx.direction === 'out'
                     const origSymbol = CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency
+                    // 减号：支出 / 转账"转出"；加号：收入 / 转账"转入"（含老数据 direction=null）
+                    const showMinus = isExpense || isTransferOut
 
                     return (
                       <button key={tx.id}
@@ -428,7 +432,7 @@ const { user } = useAuth()
                           <p className={`text-sm font-semibold ${
                             isExpense ? 'text-red-500' : isIncome ? 'text-green-500' : 'text-blue-500'
                           }`}>
-                            {isExpense ? '-' : '+'}{symbol} {fmt(converted)}
+                            {showMinus ? '-' : '+'}{symbol} {fmt(converted)}
                           </p>
                           {tx.currency !== displayCurrency && (
                             <p className="text-[10px] text-gray-400">{origSymbol} {fmt(tx.amount)}</p>

@@ -43,6 +43,7 @@ export interface Database {
           description: string | null
           date: string
           exchange_rate: number | null
+          direction: string | null
           created_at: string
           updated_at: string
         }
@@ -56,6 +57,7 @@ export interface Database {
           description?: string | null
           date: string
           exchange_rate?: number | null
+          direction?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -67,6 +69,7 @@ export interface Database {
           description?: string | null
           date?: string
           exchange_rate?: number | null
+          direction?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -89,7 +89,10 @@ export function useTransactions() {
       if (!user) return { error: '未登录' as const }
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
-      const row: DbTransaction = {
+      // 基础字段每行必有。direction 仅 type='transfer' 时才附加 —— 生产
+      // DB 还没跑 002 迁移时 direction 列不存在，给非转账写 `null` 会被
+      // PostgREST 拒成 "column not found" 把支出/收入也连坐。所以条件附加。
+      const baseRow = {
         id,
         user_id: user.id,
         type: input.type,
@@ -102,6 +105,10 @@ export function useTransactions() {
         created_at: now,
         updated_at: now,
       }
+      const row: DbTransaction =
+        input.type === 'transfer'
+          ? ({ ...baseRow, direction: input.direction ?? 'in' } as DbTransaction)
+          : (baseRow as DbTransaction)
       setTransactions((prev) => {
         const next = [row, ...prev]
         saveCache(CACHE_KEY, next)
@@ -117,7 +124,13 @@ export function useTransactions() {
   /** 更新已有 transaction。 */
   const update = useCallback(async (id: string, patch: TransactionUpdate) => {
     const now = new Date().toISOString()
-    const cleaned = { ...patch, updated_at: now }
+    const cleaned: TransactionUpdate = { ...patch, updated_at: now }
+    // 同 insert 的兼容逻辑：未跑 002 迁移时 direction 列不存在；
+    // patch 里 direction=null（非转账更新带过来的）会让整条 update 被
+    // PostgREST 拒。仅 type='transfer' 的更新才把 direction 真带出去。
+    if (cleaned.type !== 'transfer' && 'direction' in cleaned) {
+      delete (cleaned as { direction?: unknown }).direction
+    }
     setTransactions((prev) => {
       const next = prev.map((t) => (t.id === id ? { ...t, ...cleaned } as DbTransaction : t))
       saveCache(CACHE_KEY, next)

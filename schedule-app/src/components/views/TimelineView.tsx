@@ -226,6 +226,7 @@ export default function TimelineView() {
               setReassign({ eventIds, hintCode })
             }
             groupBroadcast={groupBroadcast}
+            highlightId={highlightId}
           />
         )}
       </div>
@@ -316,6 +317,7 @@ interface ByCourseProps {
   onEdit: (e: Event) => void
   onReassign: (eventIds: string[], hintCode: string | null) => void
   groupBroadcast: { epoch: number; defaultOpen: boolean }
+  highlightId: string | null
 }
 
 function ByCourse({
@@ -326,6 +328,7 @@ function ByCourse({
   onEdit,
   onReassign,
   groupBroadcast,
+  highlightId,
 }: ByCourseProps) {
   const t = useT()
   // Group by course_id; sort within each group by date (tbd last), and courses
@@ -404,6 +407,7 @@ function ByCourse({
               )
             }
             broadcast={groupBroadcast}
+            highlightId={highlightId}
           />
         )
       })}
@@ -485,6 +489,7 @@ interface CourseGroupProps {
   onEdit: (e: Event) => void
   onReassign: () => void
   broadcast: { epoch: number; defaultOpen: boolean }
+  highlightId: string | null
 }
 
 function CourseGroup({
@@ -497,6 +502,7 @@ function CourseGroup({
   onEdit,
   onReassign,
   broadcast,
+  highlightId,
 }: CourseGroupProps) {
   const t = useT()
   const [open, setOpen] = useState(broadcast.defaultOpen)
@@ -507,6 +513,17 @@ function CourseGroup({
     setOpen(broadcast.defaultOpen)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [broadcast.epoch])
+  // Deep-link auto-expand: when a notification highlight targets an event in
+  // this group, force the group open so the parent's scrollIntoView can find
+  // the EventCard. Only fires when highlightId changes — after the parent
+  // clears the query the highlightId goes null and we no longer interfere
+  // with manual toggle state.
+  useEffect(() => {
+    if (highlightId && events.some((e) => e.id === highlightId)) {
+      setOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightId])
   const pending = events.filter((e) => e.status !== 'completed').length
 
   return (

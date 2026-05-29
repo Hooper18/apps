@@ -76,19 +76,9 @@ describe('TransactionSheet', () => {
     expect(screen.getByText(/\+¥ 100/)).toBeInTheDocument()
   })
 
-  it("transfer with direction='in' (default for legacy null) shows '+' prefix", () => {
-    renderSheet({ type: 'transfer', currency: 'CNY', amount: 100, direction: null }, 'CNY')
-    expect(screen.getByText(/\+¥ 100/)).toBeInTheDocument()
-  })
-
-  it("transfer with direction='out' shows '−' prefix", () => {
-    renderSheet({ type: 'transfer', currency: 'CNY', amount: 100, direction: 'out' }, 'CNY')
-    expect(screen.getByText(/-¥ 100/)).toBeInTheDocument()
-  })
-
-  it("transfer with direction='in' shows '+' prefix", () => {
-    renderSheet({ type: 'transfer', currency: 'CNY', amount: 100, direction: 'in' }, 'CNY')
-    expect(screen.getByText(/\+¥ 100/)).toBeInTheDocument()
+  it("transfer shows no prefix", () => {
+    renderSheet({ type: 'transfer', currency: 'CNY', amount: 100 }, 'CNY')
+    expect(screen.getByText(/^¥ 100/)).toBeInTheDocument()
   })
 
   it('converts to display currency when different from source', () => {

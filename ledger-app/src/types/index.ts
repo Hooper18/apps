@@ -48,8 +48,6 @@ export interface TxDetail {
   date: string
   category_id: string
   exchange_rate?: number | null
-  /** 仅 type='transfer' 时使用：'in'=转入(+), 'out'=转出(-), null/undefined 视为 'in'。 */
-  direction?: string | null
   categories: { name: string; icon: string } | null
 }
 

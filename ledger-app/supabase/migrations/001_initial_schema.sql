@@ -56,7 +56,6 @@ CREATE TABLE public.transactions (
   description   TEXT,
   date          DATE          NOT NULL DEFAULT CURRENT_DATE,
   exchange_rate NUMERIC(20,8),
-  direction     TEXT          CHECK (direction IS NULL OR direction IN ('in', 'out')),
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
@@ -65,7 +64,6 @@ COMMENT ON TABLE  public.transactions IS '流水记录';
 COMMENT ON COLUMN public.transactions.type          IS 'expense=支出, income=收入, transfer=转账';
 COMMENT ON COLUMN public.transactions.currency      IS '记账时输入币种（原始）';
 COMMENT ON COLUMN public.transactions.exchange_rate IS '记账时刻的 currency→baseCurrency 比率快照（NULL 表示同币种或无快照）';
-COMMENT ON COLUMN public.transactions.direction     IS '转账方向：in=转入(+), out=转出(-); NULL 视为 in（兼容老数据）。仅 type=transfer 时使用。';
 
 CREATE INDEX idx_transactions_user_date ON public.transactions (user_id, date DESC);
 CREATE INDEX idx_transactions_user_type ON public.transactions (user_id, type);

@@ -88,7 +88,6 @@ export default function Calendar() {
           date: t.date,
           category_id: t.category_id,
           exchange_rate: t.exchange_rate,
-          direction: t.direction,
           categories: c ? { name: c.name, icon: c.icon } : null,
         } as TxDetail
       })
@@ -267,8 +266,6 @@ export default function Calendar() {
                 const converted = convertTx(tx)
                 const isExpense = tx.type === 'expense'
                 const isIncome  = tx.type === 'income'
-                const isTransferOut = tx.type === 'transfer' && tx.direction === 'out'
-                const showMinus = isExpense || isTransferOut
                 const origSymbol = CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency
                 return (
                   <button key={tx.id}
@@ -289,7 +286,7 @@ export default function Calendar() {
                       <p className={`text-sm font-semibold ${
                         isExpense ? 'text-red-500' : isIncome ? 'text-green-500' : 'text-blue-500'
                       }`}>
-                        {showMinus ? '-' : '+'}{symbol} {fmt(converted)}
+                        {isExpense ? '-' : '+'}{symbol} {fmt(converted)}
                       </p>
                       {tx.currency !== displayCurrency && (
                         <p className="text-[10px] text-gray-400">{origSymbol} {fmt(tx.amount)}</p>

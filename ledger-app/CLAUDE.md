@@ -1,6 +1,6 @@
 # 口袋记账（ledger-app）
 
-> 最后校准：2026-05-07，以代码为准重写。
+> 最后校准：2026-05-30，以代码为准重写。
 
 ## 项目概述
 React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `finance-app.html` 离线原型（已不维护，保留参考）。
@@ -26,15 +26,22 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 |----|---------|------|
 | `users_profile` | id, preferred_currency, default_currency, created_at, updated_at | 1:1 auth.users |
 | `categories` | id, user_id, name, type, icon, created_at | 用户级分类，**无 updated_at** |
-| `transactions` | id, user_id, type, amount, currency, **category_id** UUID, description, date, **exchange_rate**, created_at, updated_at | 流水 |
+| `transactions` | id, user_id, type, amount, currency, **category_id** UUID, description, date, **exchange_rate**, **direction**, created_at, updated_at | 流水 |
 | `budgets` | id, user_id, **category_id** (NULL=总预算), amount, currency, **period**, created_at | **无 updated_at** |
 
 全部启用 RLS：仅操作自己的行。
 
-### 触发器
+### `transactions.direction`（2026-05-30 加）
+- 仅 `type='transfer'` 时使用：`'in'`=转入(+)，`'out'`=转出(-)；`NULL` 视为 `'in'`（兼容 002 迁移前的老数据，UI 全按 `+` 渲染）。
+- 列上的 CHECK：`direction IS NULL OR direction IN ('in', 'out')`。
+- `useTransactions.insert`：**只有 type='transfer'** 才在 payload 里附 `direction`；其它类型不带这字段，避免 PostgREST 在未跑 002 的 DB 上报 column-not-found。
+- AddTransaction：type tabs 选"转账"后下方多一行 `[+ 转入] [- 转出]` toggle，默认转入。
+
+### 触发器与分类兜底
 - **`handle_new_user`**：新用户注册 → 仅创建 `users_profile` 行，**不创建任何分类**。
-- 分类首次使用时由前端 `buildFallback()`（`src/pages/AddTransaction.tsx`）兜底返回默认列表。`AddTransaction` 进页只读 `useCategories()` 的 localStorage 快照 + `buildFallback` 兜底，**不再**自己发 supabase 请求 —— 避免冷启动 ~3s 等网络才出分类。
-- 老 DB 行重命名走 `src/lib/categoryMigrations.ts`：App 启动时 `migratePetToFruit(user.id)` 把名为"宠物"的分类改成"水果"（含图标），先改 localStorage 快照（避免闪一帧旧名），再 supabase UPDATE（跨设备生效），完成后写 localStorage flag 跳过后续轮询。完全幂等，UPDATE 命中 0 行无副作用。
+- 分类首次使用前由前端 `buildFallback()`（`src/pages/AddTransaction.tsx`）兜底显示默认列表，**id 是 `'0'/'1'/'2'`... 字符串占位**（不是 UUID，直插会被 PG 拒 22P02）。
+- **首次记账 seed**（`useCategories.seedDefaults`）：`AddTransaction.handleSave` 检测到选中 id 不在真实 `allCats` 里，先调 `seedDefaults()`：用 `crypto.randomUUID()` 给 `EXPENSE_CATEGORIES + INCOME_CATEGORIES + TRANSFER_CATEGORIES` 各项建 row，写本地 state + cache，同时入 outbox FIFO；然后按 `(name, type)` 在新列表里找到真实 UUID 替换 `category_id`，再走 insertTx。FIFO 保证离线时也能跑——恢复网络后 categories 先推、transaction 后推，FK 不会冲突。已存在的同 `(name, type)` 跳过，幂等。
+- 老 DB 行重命名走 `src/lib/categoryMigrations.ts`：App 启动时 `migratePetToFruit(user.id)` 把名为"宠物"的分类改成"水果"（含图标），先改 localStorage 快照（避免闪一帧旧名），再 supabase UPDATE（跨设备生效）。完全幂等。
 - `set_updated_at`：仅 `users_profile` / `transactions` 上挂触发器（`categories` / `budgets` 无 updated_at 列）。
 
 ### budgets.period
@@ -50,7 +57,11 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 
 ## Migration
 
-`supabase/migrations/001_initial_schema.sql` 是**当前生产 schema 的快照式 migration**（一次性建表，不再增量演进；新环境直接执行可得到与生产一致的结构）。
+- `supabase/migrations/001_initial_schema.sql`：**当前生产 schema 的快照式 migration**（一次性建表）。已含 `transactions.direction` 列 + `type IN ('expense','income','transfer')` 的两个 CHECK。新环境直接执行可得到与生产一致的结构。
+- `supabase/migrations/002_transfer_direction_and_check_repair.sql`：**生产 schema 漂移修复**（2026-05-30）。生产 DB 早期部署的 `transactions_type_check` / `categories_type_check` 实际只允许 `('expense', 'income')`，没把后期加进代码的 `'transfer'` 同步到 DB，所以记一笔转账一直撞 23514 `check_violation`。002 干两件事：
+  1. DROP + ADD 两个 type CHECK 重建为含 `'transfer'`
+  2. ALTER TABLE transactions ADD COLUMN direction（接上面的方向特性）
+- **新环境跑 001 即可**；老环境（生产）需要**额外**在 Supabase Dashboard SQL Editor 跑一次 002。客户端代码已经向后兼容："非转账 insert 不带 direction 字段"，所以未跑 002 的环境支出/收入也能正常工作，只是转账被 23514 拒。
 
 ## 多币种与汇率（13 种货币）
 - 集中在 `src/types/index.ts`：
@@ -110,11 +121,47 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 
 ## 全局 Toast
 - `src/lib/toast.ts`：window event bus（`ledger:toast`），导出 `showToast(message, { durationMs? })` / `subscribeToast(cb)`。
-- `src/components/layout/ToastHost.tsx`：唯一渲染宿主，挂在 `App` 顶层 Provider 内。复用 `.anim-toast` 动画。
-- 用途：**模块代码（非 React 树内）的偶发用户级提示**——目前由 `sync.ts:classifyError` 在 outbox 被服务端业务级拒绝时调用，未来汇率 API、通知权限失败等也走这里。
+- `src/components/layout/ToastHost.tsx`：唯一渲染宿主，挂在 `App` 顶层 Provider 内。
+  - `rounded-2xl` + `break-words` + `max-w-[85vw]`，长消息（如 PG `同步被拒：23514: new row...`）可换行不裁断
+  - `onClick={() => setMsg('')}` + `pointer-events-auto`，用户可点击提前关闭
+  - inline `animationDuration: ${duration}ms` 让 `.anim-toast` 的 keyframe 时长跟 setTimeout 对齐，不会出现"动画走完但 DOM 还挂着"的空挂区
+- 用途：**模块代码（非 React 树内）的偶发用户级提示**——目前由 `sync.ts:classifyError` 在 outbox 被服务端业务级拒绝时调用，duration 6 秒。同时 `console.error('[sync] outbox entry rejected by supabase', err)` 把完整 err 丢进 DevTools 让用户能看具体哪个约束失败。未来汇率 API、通知权限失败等都走这里。
 - AddTransaction 内部的本地 toast 是**业务反馈**（保存成功 / 校验失败），不走全局通道，保持原状。
 
+## 同步队列（`src/lib/sync.ts`）
+- `pushOutbox()`：FIFO 推 outbox 到 supabase。`flushOne` 返回 false（网络错）就 bumpRetry + break；返回 true（成功 / 业务错）就 outbox.remove + 继续。
+- `pullAll()`：dispatchEvent `ledger:sync-trigger`，所有数据 hook 订阅 + reload。
+- `sync()`：先 push 后 pull，**`inFlight` 闸门防止并发同步重复推**。
+  - **历史 bug（2026-05-29 修）**：之前写法是 `inFlight = (async () => { try{...} finally { inFlight = null } })()`，离线分支 IIFE 体内**没有 await**，整个体会同步跑完，`inFlight = null` 在外层 `inFlight = <iife>` 赋值前执行；结果离线 sync 一跑完 `inFlight` 反而被 resolved Promise 卡住，下次 sync 一直命中 `if (inFlight) return` 永远不再推。
+  - **现写法**：`work.finally(() => { if (inFlight === work) inFlight = null })`，把闸门清理移到 IIFE 外的 .finally 链，两条路径都按预期清。回归用例 `does not get stuck in inFlight after an offline sync` 锁住这个不变式（`src/lib/sync.test.ts`）。
+- `classifyError`：网络错（message 含 "failed to fetch" / "network"）→ false 保留重试；其它（PGRST / CHECK / FK 等业务错）→ console.error 完整 err + showToast 6 秒 + return true 出队。
+
+## 统计页（`src/pages/Charts.tsx`）
+五个 tab，Settings 里可独立开关：
+- **月度趋势** overview：近 6/12 月支出 + 收入对照柱状图、月度明细列表
+- **每日支出** daily：当月每日柱状图 + IQR 异常值过滤 toggle（≥4 天有数据才出现）+ 单日明细面板
+- **分类占比** category：支出/收入饼图 + 自定义图例（点行隐藏 / 点箭头钻到日明细）
+- **更多** extra：日均支出、结余率、最高单笔、Top 类目、**恩格尔系数（带 ⓘ 图标，点开说明"食品"包含哪些类目）**、环比上月、按星期支出分布
+- **转账** transfer（2026-05-29 加）：完全独立于上面 4 个 tab 的数据流（`monthlyTransferTxs` 不入 `monthlyTxs`，不进 overview 累加），不影响现有支出/收入统计。4 联卡片（转入 / 转出 / 净额 / 笔数）+ 环比 + 类目饼图 + 每日柱状（蓝 in + 红 out 并排）。空状态 🔄。
+
+恩格尔系数的"食品"按 `FOOD_CATEGORY_NAMES` set（中英对照，含 `三餐 / 零食 / 水果 / Meals / Snacks / Fruits`）匹配类目名聚合；ⓘ 展开会列出这些类目让用户知道分组规则。
+
+## 测试基建（`vitest` + `@testing-library/react` + Playwright）
+- **单元 / 组件**：`vitest run`（共 25 文件 / 219 用例），覆盖 lib 全部纯逻辑、所有 hooks、各 contexts、关键组件（AddTransaction / TransactionSheet / ToastHost / OfflineBanner / PasswordInput）。
+  - `vitest.config.ts` 独立于 `vite.config.ts`，避开 PWA 插件在 jsdom 里的副作用。`tsconfig.test.json` 给编辑器；构建 `tsconfig.app.json` 排除 test 文件。
+  - `.env.test` 提供 stub Supabase URL（mock 不命中真实服务）。
+  - 跨用例 `navigator.onLine` 用 `Object.defineProperty` 直接覆盖，避免 `vi.spyOn` 的 getter mockRestore 在 jsdom 里清不回 prototype（spyOn restore 后会返回 undefined）。
+- **E2E**：`npm run test:e2e`（Playwright + Chromium），5 个 smoke 用例验证真实生产构建的 app shell：app 启动渲染非空、未登录访问受保护路由跳 /auth、/reset-password 公开、PWA manifest 200。E2E 用 page.route() stub 掉 supabase REST + auth，不连真实服务。
+- **CI**：`.github/workflows/ci.yml`（仓库根），push/PR 跑 vitest → build → playwright，失败时上传 playwright-report artifact。
+
 ## 历史修复记录（按时间倒序，便于回溯）
+- (2026-05-30) 转账可选转入(+)/转出(-)：UI toggle + `transactions.direction` 列 + 客户端向后兼容（非转账不带字段）
+- (2026-05-30) 修生产 schema 漂移：`transactions_type_check` / `categories_type_check` 原本不允许 `'transfer'`，002 迁移 DROP+ADD 重建
+- (2026-05-29) 修首次记账 22P02：`useCategories.seedDefaults` 自动 seed 默认分类拿真 UUID 再 insert
+- (2026-05-29) 全局 toast 通道：sync 业务错从 `console.warn` 静默改为用户可见的 toast
+- (2026-05-29) sync 离线 inFlight 卡死 bug：闸门清理移到 IIFE 外
+- (2026-05-29) 转账独立统计 tab：现有 4 tab 数据流零修改
+- (2026-05-29) 恩格尔系数加 ⓘ 图标说明分组规则
 - 全局日期 UTC 偏移修复：用 `localDateStr()` 替代 `toISOString()`，避免 UTC+8 凌晨记账记到昨天
 - 日历今日高亮 UTC 偏移修复
 - 配置 Resend SMTP（smtp.resend.com:465，发件人 onboarding@resend.dev "口袋记账"）
@@ -128,7 +175,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - PWA 状态栏：theme-color = `#ffffff`，viewport 加 `viewport-fit=cover`
 
 ## GitHub
-Hooper18/ledger（main 分支）
+Hooper18/apps（main 分支；ledger-app 和 schedule-app 共仓不同子目录）。push 到 main 触发 Vercel 自动部署。
 
 ## 参考
 离线版源码：`../finance-app.html`

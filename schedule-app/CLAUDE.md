@@ -222,6 +222,11 @@ useEvents.load → events 列表
 4. **`user_balance.balance_cny` 列名是 CNY，存的是 USD**——是**历史迁移残留**，不要做币种转换。
 5. **`balance.ts` 的成本公式要和 `claude-proxy/index.ts` 同步**——改一边必须改另一边并重新部署。
 
+## 测试基建（`vitest` + Playwright）
+- **单元 / 组件**：`npm test`（16 文件 / 148 用例）。`vitest.config.ts` 独立于 `vite.config.ts` 跳过 PWA / tailwind 插件副作用；`tsconfig.test.json` 给编辑器；`.env.test` 提供 stub Supabase URL。覆盖 lib 全部（utils / eventTypeGroups / balance / dataCache / lastSync / widgetSync / notifications）+ hooks（useOnlineStatus / useIsDesktop / useMutationGuard / useLastSync / useEvents）+ 关键组件（useNewEventControl / **TimelineView deep-link 自动展开回归** / **CalendarView 桌面新建按钮回归**）。
+- **E2E**：`npm run test:e2e`（Playwright + Chromium，5 个 smoke）。验证真实构建产物 app shell：启动非空、未登录访问 /todo / /calendar 跳 /auth、/reset-password 公开、PWA manifest 200。`page.route()` stub 掉 supabase REST + auth。
+- **CI**：仓库根 `.github/workflows/ci.yml`，push/PR 跑 vitest → build → playwright，失败上传 playwright-report artifact。
+
 ## Git 规范
 - 中文 commit message
 - 每个独立功能单独提交

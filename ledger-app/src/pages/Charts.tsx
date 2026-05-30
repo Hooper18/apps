@@ -10,12 +10,12 @@ import {
 } from 'chart.js'
 import type { TooltipItem } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
-import { CURRENCY_SYMBOLS } from '../types'
+import { CATEGORY_ICONS, CURRENCY_SYMBOLS } from '../types'
 import type { Currency, TxDetail } from '../types'
 import { getStatsDisplay } from './Settings'
 
@@ -75,6 +75,9 @@ export default function Charts() {
   const statsDisplay = useMemo(() => getStatsDisplay(), [])
   const firstVisibleTab = (['overview', 'daily', 'category', 'extra', 'transfer'] as Tab[]).find(k => statsDisplay[k] !== false) ?? 'overview'
   const [tab, setTab] = useState<Tab>(firstVisibleTab)
+
+  // 恩格尔系数的"i"展开：点击 label 旁的 info icon，把"食品"是怎么算出来的展开给用户
+  const [engelInfoOpen, setEngelInfoOpen] = useState(false)
 
   // Shared month navigation (daily / category / extra)
   const [year, setYear]   = useState(NOW.getFullYear())
@@ -959,10 +962,26 @@ export default function Charts() {
                   {/* Engel coefficient */}
                   {extraStats.engelCoef !== null && (() => {
                     const tier = engelTier(extraStats.engelCoef)
+                    // 把 set 里的中文名挑出来给用户看（FOOD_CATEGORY_NAMES 同时含中英文，
+                    // 这里按当前语言过滤；英文模式就显示 Meals / Snacks / Fruits）
+                    const foodNames = lang === 'zh'
+                      ? ['三餐', '零食', '水果']
+                      : ['Meals', 'Snacks', 'Fruits']
                     return (
                       <div className="bg-gray-50 rounded-xl p-3">
                         <div className="flex items-baseline justify-between mb-1.5">
-                          <p className="text-xs text-gray-400">{t('engelCoefLabel')}</p>
+                          <div className="flex items-center gap-1">
+                            <p className="text-xs text-gray-400">{t('engelCoefLabel')}</p>
+                            <button
+                              type="button"
+                              onClick={() => setEngelInfoOpen(v => !v)}
+                              aria-label={t('engelInfoAria')}
+                              aria-expanded={engelInfoOpen}
+                              className="p-0.5 -m-0.5 text-gray-400 hover:text-gray-600 active:text-gray-700 transition-colors"
+                            >
+                              <Info size={12} />
+                            </button>
+                          </div>
                           <p className="text-base font-semibold text-gray-800">
                             {extraStats.engelCoef.toFixed(1)}%
                           </p>
@@ -977,6 +996,22 @@ export default function Charts() {
                           </span>
                         </div>
                         <p className="text-xs text-gray-400">{t('engelCoefDesc')}</p>
+
+                        {/* 展开后说明"食品"是怎么聚合的（按类目名匹配 FOOD_CATEGORY_NAMES）*/}
+                        {engelInfoOpen && (
+                          <div className="mt-2.5 pt-2.5 border-t border-gray-200 space-y-1.5">
+                            <p className="text-xs text-gray-500">{t('engelInfoCountedAs')}</p>
+                            <div className="flex flex-wrap gap-1">
+                              {foodNames.map(name => (
+                                <span key={name}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white rounded-full text-xs text-gray-600 border border-gray-200">
+                                  {CATEGORY_ICONS[name] ?? '🍽️'} {name}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-400 leading-relaxed">{t('engelInfoNote')}</p>
+                          </div>
+                        )}
                       </div>
                     )
                   })()}

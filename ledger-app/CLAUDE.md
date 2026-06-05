@@ -45,7 +45,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - `set_updated_at`：仅 `users_profile` / `transactions` 上挂触发器（`categories` / `budgets` 无 updated_at 列）。
 
 ### budgets.period
-- 类型：`'monthly' | 'yearly'`（CHECK 约束 + `src/types/index.ts:34` 也定义为字面量联合类型）。
+- 类型：DB 层 `CHECK (period IN ('monthly','yearly'))` 强制；TS 侧 `database.types.ts` 里 period 为 `string`（无字面量联合，`src/types/index.ts` 也不定义 period）。
 - 当前代码只用 `'monthly'`（`src/pages/Budget.tsx:44`），`'yearly'` 为预留。
 - 唯一性：`(user_id, period, category_id)`，`category_id IS NULL` 表示总预算。
 - NULL 默认不参与 unique 约束，需手动建索引：

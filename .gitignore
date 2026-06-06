@@ -19,8 +19,10 @@ twa-builds/
 **/android/captures/
 **/android/local.properties
 
-# 本地工具配置（不进仓库）
+# 本地工具配置 / 编辑器（不进仓库）
 .mcp.json
+.codex/
+.vscode/
 
 # 一次性任务说明（属于其他项目）
 ARCHIVE_SPEC.md

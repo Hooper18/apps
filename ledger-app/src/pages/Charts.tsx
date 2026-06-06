@@ -13,6 +13,7 @@ import { Bar, Pie } from 'react-chartjs-2'
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import type { TranslationKey } from '../lib/i18n'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
 import { CATEGORY_ICONS, CURRENCY_SYMBOLS } from '../types'
@@ -39,6 +40,16 @@ const NOW = new Date()
 
 // 恩格尔系数：食品支出占比。识别食品类别用类目名兜底（默认类目）。
 const FOOD_CATEGORY_NAMES = new Set(['三餐', '零食', '水果', 'Meals', 'Snacks', 'Fruits'])
+
+// 恩格尔系数档位（联合国标准）：max 为该档上界（不含），最后一档为 Infinity。
+// engelTier() 与 ⓘ 展开里的档位对照表共用这份定义，保证阈值/配色/文案单一来源。
+const ENGEL_TIERS: { key: TranslationKey; color: string; range: string; max: number }[] = [
+  { key: 'engelTier1', color: '#43a047', range: '< 30%',  max: 30 },
+  { key: 'engelTier2', color: '#7cb342', range: '30–40%', max: 40 },
+  { key: 'engelTier3', color: '#fdd835', range: '40–50%', max: 50 },
+  { key: 'engelTier4', color: '#fb8c00', range: '50–60%', max: 60 },
+  { key: 'engelTier5', color: '#e53935', range: '≥ 60%',  max: Infinity },
+]
 
 function monthStart(y: number, m: number) {
   return `${y}-${String(m).padStart(2, '0')}-01`
@@ -78,6 +89,17 @@ export default function Charts() {
 
   // 恩格尔系数的"i"展开：点击 label 旁的 info icon，把"食品"是怎么算出来的展开给用户
   const [engelInfoOpen, setEngelInfoOpen] = useState(false)
+
+  // 环比口径：'same'=同期(本月1–N日 vs 上月1–N日，N=今天)，'full'=整月。
+  // 月中直接拿半个月比整月会一直偏低且无意义，所以默认同期；持久化到 localStorage。
+  const [momMode, setMomMode] = useState<'same' | 'full'>(() =>
+    localStorage.getItem('ledger_mom_mode') === 'full' ? 'full' : 'same'
+  )
+  function changeMomMode(m: 'same' | 'full') {
+    setMomMode(m)
+    try { localStorage.setItem('ledger_mom_mode', m) } catch { /* 隐私模式 setItem 可能抛错，忽略 */ }
+  }
+  const [momInfoOpen, setMomInfoOpen] = useState(false)
 
   // Shared month navigation (daily / category / extra)
   const [year, setYear]   = useState(NOW.getFullYear())
@@ -280,16 +302,44 @@ export default function Charts() {
     }, 0)
     const engelCoef = totalExp > 0 && foodExp > 0 ? (foodExp / totalExp * 100) : null
 
-    // 环比上月
-    const prevExp = prevMonthTxs.filter(tx => tx.type === 'expense')
-      .reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
-    const prevInc = prevMonthTxs.filter(tx => tx.type === 'income')
-      .reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
+    // 环比上月——同时算两种口径：
+    //   整月(full)：本月合计 vs 上月合计（月份完整时才有意义）
+    //   同期(same/MTD)：本月 1–cutoff 日 vs 上月 1–cutoff 日（cutoff=本月时取今天，过去月取整月最后一天）
+    const dayOf = (d: string) => parseInt(d.slice(8, 10), 10)
+    const daysInMonth     = new Date(year, month, 0).getDate()
+    const prevMonth       = month === 1 ? 12 : month - 1
+    const prevYear        = month === 1 ? year - 1 : year
+    const daysInPrevMonth = new Date(prevYear, prevMonth, 0).getDate()
+    const isCur     = year === NOW.getFullYear() && month === NOW.getMonth() + 1
+    const cutoffDay = isCur ? NOW.getDate() : daysInMonth
+    const prevCutoff = Math.min(cutoffDay, daysInPrevMonth) // 上月若天数更少，截到上月最后一天
+    // cutoff 真正落在月份中间（本月未过完）才有"同期≠整月"的区别，也才需要露出切换/提示
+    const isPartialMonth = cutoffDay < daysInMonth
+
+    const prevExpTxs = prevMonthTxs.filter(tx => tx.type === 'expense')
+    const prevIncTxs = prevMonthTxs.filter(tx => tx.type === 'income')
+    const sum = (txs: typeof prevExpTxs) =>
+      txs.reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
+    const sumExpenses = (txs: TxDetail[]) =>
+      txs.reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0)
+
+    // 整月口径
+    const prevExp = sum(prevExpTxs)
+    const prevInc = sum(prevIncTxs)
     const expDelta = prevExp > 0 ? ((totalExp - prevExp) / prevExp * 100) : null
     const incDelta = prevInc > 0 ? ((totalInc - prevInc) / prevInc * 100) : null
 
+    // 同期(MTD)口径
+    const mtdExp = sumExpenses(expenses.filter(tx => dayOf(tx.date) <= cutoffDay))
+    const mtdInc = sumExpenses(incomes.filter(tx => dayOf(tx.date) <= cutoffDay))
+    const prevMtdExp = sum(prevExpTxs.filter(tx => dayOf(tx.date) <= prevCutoff))
+    const prevMtdInc = sum(prevIncTxs.filter(tx => dayOf(tx.date) <= prevCutoff))
+    const mtdExpDelta = prevMtdExp > 0 ? ((mtdExp - prevMtdExp) / prevMtdExp * 100) : null
+    const mtdIncDelta = prevMtdInc > 0 ? ((mtdInc - prevMtdInc) / prevMtdInc * 100) : null
+
     return { totalExp, totalInc, avgDailyExp, maxExpTx, maxDow, dowExp, topCat, savingsRate,
-             foodExp, engelCoef, prevExp, prevInc, expDelta, incDelta }
+             foodExp, engelCoef, prevExp, prevInc, expDelta, incDelta,
+             cutoffDay, isPartialMonth, mtdExp, mtdInc, prevMtdExp, prevMtdInc, mtdExpDelta, mtdIncDelta }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyTxs, prevMonthTxs, year, month])
 
@@ -424,13 +474,10 @@ export default function Charts() {
     },
   }
 
-  // 恩格尔系数等级（联合国标准）
+  // 恩格尔系数等级（联合国标准）——阈值/配色取自 ENGEL_TIERS 单一来源
   function engelTier(coef: number): { label: string; color: string } {
-    if (coef < 30) return { label: t('engelTier1'), color: '#43a047' }
-    if (coef < 40) return { label: t('engelTier2'), color: '#7cb342' }
-    if (coef < 50) return { label: t('engelTier3'), color: '#fdd835' }
-    if (coef < 60) return { label: t('engelTier4'), color: '#fb8c00' }
-    return { label: t('engelTier5'), color: '#e53935' }
+    const tier = ENGEL_TIERS.find(tt => coef < tt.max) ?? ENGEL_TIERS[ENGEL_TIERS.length - 1]
+    return { label: t(tier.key), color: tier.color }
   }
 
   // ── Chart configs ─────────────────────────────────────────────────────
@@ -961,7 +1008,10 @@ export default function Charts() {
 
                   {/* Engel coefficient */}
                   {extraStats.engelCoef !== null && (() => {
-                    const tier = engelTier(extraStats.engelCoef)
+                    const coef = extraStats.engelCoef
+                    const tier = engelTier(coef)
+                    // 当前系数落在哪个档位（用于 ⓘ 展开里高亮对应行）
+                    const activeTierIndex = ENGEL_TIERS.findIndex(tt => coef < tt.max)
                     // 把 set 里的中文名挑出来给用户看（FOOD_CATEGORY_NAMES 同时含中英文，
                     // 这里按当前语言过滤；英文模式就显示 Meals / Snacks / Fruits）
                     const foodNames = lang === 'zh'
@@ -983,13 +1033,13 @@ export default function Charts() {
                             </button>
                           </div>
                           <p className="text-base font-semibold text-gray-800">
-                            {extraStats.engelCoef.toFixed(1)}%
+                            {coef.toFixed(1)}%
                           </p>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all"
-                              style={{ width: `${Math.min(extraStats.engelCoef, 100)}%`, background: tier.color }} />
+                              style={{ width: `${Math.min(coef, 100)}%`, background: tier.color }} />
                           </div>
                           <span className="text-xs font-medium shrink-0" style={{ color: tier.color }}>
                             {tier.label}
@@ -997,53 +1047,128 @@ export default function Charts() {
                         </div>
                         <p className="text-xs text-gray-400">{t('engelCoefDesc')}</p>
 
-                        {/* 展开后说明"食品"是怎么聚合的（按类目名匹配 FOOD_CATEGORY_NAMES）*/}
+                        {/* 展开后：先给档位对照（系数区间→档位，高亮当前档），再说明"食品"是怎么聚合的 */}
                         {engelInfoOpen && (
-                          <div className="mt-2.5 pt-2.5 border-t border-gray-200 space-y-1.5">
-                            <p className="text-xs text-gray-500">{t('engelInfoCountedAs')}</p>
-                            <div className="flex flex-wrap gap-1">
-                              {foodNames.map(name => (
-                                <span key={name}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white rounded-full text-xs text-gray-600 border border-gray-200">
-                                  {CATEGORY_ICONS[name] ?? '🍽️'} {name}
-                                </span>
-                              ))}
+                          <div className="mt-2.5 pt-2.5 border-t border-gray-200 space-y-2.5">
+                            {/* 档位对照表 */}
+                            <div className="space-y-1">
+                              <p className="text-xs text-gray-500">{t('engelTierLegendTitle')}</p>
+                              <div className="space-y-0.5">
+                                {ENGEL_TIERS.map((tt, i) => {
+                                  const active = i === activeTierIndex
+                                  return (
+                                    <div key={tt.key}
+                                      className={`flex items-center gap-2 rounded-md px-1.5 py-1 ${active ? 'bg-white border border-gray-200' : ''}`}>
+                                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tt.color }} />
+                                      <span className={`w-16 shrink-0 text-xs tabular-nums ${active ? 'font-medium text-gray-700' : 'text-gray-500'}`}>
+                                        {tt.range}
+                                      </span>
+                                      <span className={`text-xs ${active ? 'font-semibold' : 'text-gray-500'}`}
+                                        style={active ? { color: tt.color } : undefined}>
+                                        {t(tt.key)}
+                                      </span>
+                                      {active && (
+                                        <span className="ml-auto shrink-0 text-[10px] text-gray-400">{t('engelTierCurrent')}</span>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
-                            <p className="text-xs text-gray-400 leading-relaxed">{t('engelInfoNote')}</p>
+
+                            {/* "食品"是怎么聚合的（按类目名匹配 FOOD_CATEGORY_NAMES）*/}
+                            <div className="space-y-1.5 pt-2.5 border-t border-gray-200">
+                              <p className="text-xs text-gray-500">{t('engelInfoCountedAs')}</p>
+                              <div className="flex flex-wrap gap-1">
+                                {foodNames.map(name => (
+                                  <span key={name}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-white rounded-full text-xs text-gray-600 border border-gray-200">
+                                    {CATEGORY_ICONS[name] ?? '🍽️'} {name}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-400 leading-relaxed">{t('engelInfoNote')}</p>
+                            </div>
                           </div>
                         )}
                       </div>
                     )
                   })()}
 
-                  {/* Month-over-month */}
-                  {(extraStats.expDelta !== null || extraStats.incDelta !== null) && (
-                    <div className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-xs text-gray-400 mb-2">{t('momLabel')}</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-0.5">{t('momExpense')}</p>
-                          {extraStats.expDelta !== null ? (
-                            <p className={`text-sm font-semibold ${extraStats.expDelta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
-                              {extraStats.expDelta > 0 ? '+' : ''}{extraStats.expDelta.toFixed(1)}%
-                            </p>
-                          ) : (
-                            <p className="text-sm text-gray-400">—</p>
+                  {/* Month-over-month（环比上月）：默认同期口径，月中可切整月 */}
+                  {(() => {
+                    // 过去的完整月份同期==整月，强制走整月口径；只有本月未过完时才尊重用户选择
+                    const useSame = extraStats.isPartialMonth && momMode === 'same'
+                    const expDelta = useSame ? extraStats.mtdExpDelta : extraStats.expDelta
+                    const incDelta = useSame ? extraStats.mtdIncDelta : extraStats.incDelta
+                    if (expDelta === null && incDelta === null) return null
+                    return (
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <div className="flex items-center gap-1">
+                            <p className="text-xs text-gray-400">{t('momLabel')}</p>
+                            <button
+                              type="button"
+                              onClick={() => setMomInfoOpen(v => !v)}
+                              aria-label={t('momInfoAria')}
+                              aria-expanded={momInfoOpen}
+                              className="p-0.5 -m-0.5 text-gray-400 hover:text-gray-600 active:text-gray-700 transition-colors"
+                            >
+                              <Info size={12} />
+                            </button>
+                          </div>
+                          {/* 只有本月未过完（同期≠整月）才需要切换 */}
+                          {extraStats.isPartialMonth && (
+                            <div className="flex items-center rounded-lg bg-gray-200/70 p-0.5 text-xs shrink-0">
+                              {(['same', 'full'] as const).map(m => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => changeMomMode(m)}
+                                  aria-pressed={momMode === m}
+                                  className={`px-2 py-0.5 rounded-md transition-colors ${
+                                    momMode === m ? 'bg-white text-gray-800 font-medium' : 'text-gray-500'
+                                  }`}
+                                >
+                                  {m === 'same' ? t('momModeSame') : t('momModeFull')}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-0.5">{t('momIncome')}</p>
-                          {extraStats.incDelta !== null ? (
-                            <p className={`text-sm font-semibold ${extraStats.incDelta >= 0 ? 'text-green-600' : 'text-[#e53935]'}`}>
-                              {extraStats.incDelta > 0 ? '+' : ''}{extraStats.incDelta.toFixed(1)}%
-                            </p>
-                          ) : (
-                            <p className="text-sm text-gray-400">—</p>
-                          )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">{t('momExpense')}</p>
+                            {expDelta !== null ? (
+                              <p className={`text-sm font-semibold ${expDelta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
+                                {expDelta > 0 ? '+' : ''}{expDelta.toFixed(1)}%
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400">—</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">{t('momIncome')}</p>
+                            {incDelta !== null ? (
+                              <p className={`text-sm font-semibold ${incDelta >= 0 ? 'text-green-600' : 'text-[#e53935]'}`}>
+                                {incDelta > 0 ? '+' : ''}{incDelta.toFixed(1)}%
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400">—</p>
+                            )}
+                          </div>
                         </div>
+                        {/* 展开后说明当前口径的算法 */}
+                        {momInfoOpen && (
+                          <p className="mt-2.5 pt-2.5 border-t border-gray-200 text-xs text-gray-400 leading-relaxed">
+                            {useSame
+                              ? t('momInfoSame', { day: extraStats.cutoffDay })
+                              : t('momInfoFull')}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
 
                   {/* Day-of-week spending pattern */}
                   <div className="bg-gray-50 rounded-xl p-3">

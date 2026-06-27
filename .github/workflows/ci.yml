@@ -3,6 +3,9 @@ name: CI
 # 触发：所有 push 到 main + 所有 PR。
 # 设计：两个 app 各自一份 job，跑 typecheck → vitest → build → playwright；
 # concurrency 取消同分支旧跑动，避免堆积。
+# Node 固定 24：与本地开发环境(node 24 / npm 11)对齐。package-lock.json 由 npm 11 生成，
+# 用 node 20 / npm 10 跑 `npm ci` 会因 vite5+vitest4 的 esbuild 跨 npm 大版本解析差异
+# 报「lockfile 不同步、Missing esbuild」而误红——别再把这里降回 20。
 on:
   push:
     branches: [main]
@@ -24,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: ledger-app/package-lock.json
 
@@ -62,7 +65,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: schedule-app/package-lock.json
 

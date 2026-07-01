@@ -1,5 +1,6 @@
 # Claude Code local settings
 .claude/
+.superpowers/
 STEP1_*.md
 STEP1_*.sql
 STEP*_DIAGNOSIS.md
@@ -37,3 +38,5 @@ tuchenguang-site/
 tuner-app/
 moodle-dumper/
 worldcup-sim/
+sb6657-danmaku/
+jinian-app/

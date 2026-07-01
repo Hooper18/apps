@@ -2,47 +2,48 @@
 
 - 日期：2026-07-01
 - 工作名：**纪念**（repo 暂定 `jinian-app`，子域名暂定 `jinian.tuchenguang.com`，均可后续改名）
-- 状态：设计定稿（已过 3 视角对抗审查并据实修订），待写实现计划（writing-plans）
-- 技术未知点已由 4 路并行 agent 核验（webcal/.ics、农历库、Supabase、领域计算）；spec 又经 3 视角审查（技术正确/一致性/完整性）收敛。结论见文末附录。
+- 状态：设计定稿（经可视化伴侣定视觉 + 4 路技术核验 + 3 视角审查 + 跨机型/推送机制 2 轮核验），待写实现计划（writing-plans）
+
+> **重大修订（据「vivo 一定要做好提醒」的硬需求 + 跨机型核验）**：提醒方式从「导出/订阅系统日历（webcal）」**改为「Capacitor 本地通知」**。原因：国产安卓（vivo/小米/华为）自带日历**不支持订阅外部日历链接**，且服务器 Web Push（FCM 系）在国行安卓**基本不通**（华为无 GMS、vivo/小米无可用 GMS + FCM 被墙）。经核验，唯一在 vivo/小米/华为「app 关着也能到点响」且不碰谷歌/跨境的可靠机制，是**在设备本地用 AlarmManager 排程的本地通知**（作者已有 Capacitor→APK 管线，schedule-app 同款）。详见 §8 与附录 E/F。
 
 ---
 
 ## 1. 这是什么 / 目标
 
-一个**纯自己用**的纪念日 App，记录「对人重要的日子」。混合型：一个日子既能**倒数/正数**、又能**记录**（一段文字 + 一张封面图）、又能**提醒**（导出到系统日历）。
+一个**纯自己用**的纪念日 App，记录「对人重要的日子」。混合型：一个日子既能**倒数/正数**、又能**记录**（一段文字 + 一张封面图）、又能**提醒**（app 本地通知，到点弹）。
 
 三条成功标准：
 
 1. 打开就能一眼看到「最近要到的日子」和各种日子的天数。
-2. 能把日子一次性订阅进手机系统日历，之后 App 里新增/修改会（在系统日历自己的刷新节奏内）自动同步，由系统日历负责真正的提醒。
+2. 到了日子（或提前 N 天）**手机能可靠弹提醒**——尤其在 **vivo**（作者主力机），其次小米/华为，即使 app 关着也能响。
 3. 视觉达到「像 Claude web 端一样优雅」的产品感，而非 demo 感。
 
 ## 2. 非目标（YAGNI，明确不做）
 
-- ❌ **Web Push / App 内推送**：提醒完全交给系统日历（用户选 C）。不做推送。
-- ❌ **多人 / 共享 / 协作**：纯单用户（用户选 A）。仍带 `user_id` + RLS（零成本防手滑、未来可扩），但无分享 UI。
-- ❌ **多张照片 / 相册**：每个日子只有一张封面图（用户选 B）。
-- ❌ **暗色模式**（v1 不做，但颜色走 CSS 变量，v1.1 低成本可加）。
-- ❌ 复杂重复规则（每周/每两年/自定义 RRULE）。只支持三种类型。
-- ❌ **置顶（pinned）**（审查指出为悬空字段，v1 删除；未来加列成本极低）。
-- ❌ **农历 since/until**：农历仅用于每年循环的纪念日（`anniversary`）。
+- ❌ **服务器远程推送 / Web Push（FCM）/ 厂商推送 SDK**：国行安卓不通或过度工程（附录 E/F）。提醒走**设备本地通知**。
+- ❌ **导出/订阅系统日历（webcal/.ics）**：国产安卓自带日历不支持订阅，价值有限；移除整套 serverless `/api/cal`、`calendar_token`、`profiles`。
+- ❌ **iPhone 可靠提醒（v1 不做）**：iPhone 次要，v1 先做好安卓。iPhone 用网页/PWA **只读查看**，提醒不保证。iOS 提醒（Capacitor iOS 原生本地通知，或 PWA+APNs Web Push）留作 v1.1 快速跟进。
+- ❌ **多人 / 共享 / 协作**：纯单用户。仍带 `user_id` + RLS（零成本防手滑），但无分享 UI。
+- ❌ **多张照片 / 相册**：每个日子只有一张封面图。
+- ❌ **暗色模式**（v1 不做，颜色走 CSS 变量，v1.1 低成本可加）。
+- ❌ 复杂重复规则（每周/每两年/自定义 RRULE）；置顶（pinned）；农历 since/until（农历仅每年循环用）。
 
 ## 3. 技术栈与部署拓扑
 
-对标现有 `ledger-app`：
+核心是一个 React+Vite web app，用 **Capacitor 包成安卓原生 app**（复用 schedule-app 的 Capacitor 配置与 keystore）：
 
 | 层 | 选型 |
 |---|---|
 | 前端 | Vite + React 18 + TypeScript（strict） |
-| 样式 | CSS 变量 + 现有 app 样式方案；遵循全局设计规范（暖白 / 单一强调色 / 无渐变无阴影 / 1px 极淡边框） |
-| 后端 | Supabase：Auth（magic-link）+ Postgres + Storage |
-| 日历订阅接口 | 1 个 Vercel serverless 函数 `/api/cal/[token].ics`（service-role，免登录，token 鉴权） |
+| 样式 | CSS 变量；遵循全局设计规范（暖白 / 单一强调色 / 无渐变无阴影 / 1px 极淡边框） |
+| 原生壳 | **Capacitor**（Android，复用 schedule-app 管线与 `.keystores-backup` 签名）；iOS v1 不打 |
+| 提醒 | **`@capacitor/local-notifications`**（设备本地 AlarmManager 排程，见 §8） |
+| 后端 | Supabase：Auth（magic-link）+ Postgres + Storage（**仅数据/认证/图片，不参与提醒投递**） |
 | 农历 | `lunar-typescript`（6tail，MIT，零依赖，自带 .d.ts） |
-| .ics 生成 | `ical-generator`（不手拼字符串） |
-| PWA | manifest + 最小 service worker（仅「装到主屏 + 离线读缓存」，**不推送**） |
-| 部署 | 独立 Vercel 项目 → 子域名 + Cloudflare CNAME（灰云）→ vercel-dns |
+| Web 版部署 | Vercel + 子域名（只读查看 + iPhone 用）；无 serverless 函数 |
+| 安卓分发 | Capacitor 出 sideload APK（不上应用商店），复用现有 keystore 备份 |
 
-**独立仓**：按现有拓扑，本项目作为嵌套独立 git 仓，登记进工作区根 `.gitignore`，自己的 remote 部署（参考仓库既有 side-project 拓扑）。
+**独立仓**：本项目作为嵌套独立 git 仓，登记进工作区根 `.gitignore`，自己的 remote 部署（参考仓库既有 side-project 拓扑）。
 
 ## 4. 视觉规范（已通过可视化伴侣定稿）
 
@@ -65,33 +66,32 @@
 
 ### 4.1 首页 —「近期聚焦」（版式 A）
 
-- 顶部一张**大卡**突出「最近要到的一个日子」：封面图 + 顶部渐隐深色 scrim + 大倒数数字。
+- 顶部**大卡**突出「最近要到的一个日子」：封面图 + 顶部渐隐深色 scrim + 大倒数数字。
 - 下面**紧凑列表**：小圆封面缩略图 + 标题/副标题 + 右侧天数。
-- 「回忆」分区：`until` 已过期（运行时 `daysBetween<0`）的日子折叠于此。
-- 排序：默认按「下一关键日距今天数」升序（`since` 用已过天数排在合适位置或单独分区，实现时定；无 pinned）。
+- 「回忆」分区：`until` 已过期（运行时 `daysBetween<0`）折叠于此。
+- 排序：默认按「下一关键日距今天数」升序（无 pinned）。
 - 右上角 `＋` 新建。
 
 ### 4.2 详情页 —「编辑排版」（版式 ②）
 
-- 顶部返回 + `···`（编辑/删除/订阅/重置订阅链接）。
-- 封面**框图**（圆角 14，非全屏）；无封面时占位（纯色底 `--bg-tertiary` + 标题首字），不留破图。
+- 顶部返回 + `···`（编辑/删除）。
+- 封面**框图**（圆角 14）；无封面时占位（`--bg-tertiary` + 标题首字），不留破图。
 - 标题 + 起点/日期副标题。
 - **克制内联数字**（如「已经 **1024** 天」），强调色只落在数字。
 - **里程碑区**（仅 `since`）：下一个里程碑 + 已达成列表。
 - 那段文字（细排版，hairline 分割）。
-- 元信息行（Apple 设置页式）：类型 / 日历（公历·农历 X 月 X 日）/ 提醒。
-- 底部文字型「＋ 加入系统日历」。
+- 元信息行：类型 / 日历（公历·农历 X 月 X 日）/ 提醒（当天·提前 N 天）。
 
 ### 4.3 新建/编辑表单（编辑排版风格）
 
-- **封面**：空态虚线「＋ 添加封面照片」；已有封面时**点击可替换**、提供**「移除封面」**动作（移除同时删 Storage 对象）。
+- **封面**：空态「＋ 添加封面照片」；已有封面点击可替换、提供「移除封面」（同时删 Storage 对象）。
 - 名字。
-- **类型分段控件**：`每年循环` / `累加计天` / `倒数到某天`（切换改下方字段语义）。
-- **日期行** + **农历开关**（农历开关**仅在类型=每年循环时可用**）：打开后下方实时提示「农历 X 月 X 日 · 今年对应公历 …」。
-- 类型=`累加(since)` 时显示**里程碑区**（预设 chips + 自定义「第 N 天」）。其他类型不显示。
-- **提醒** chips（多选）：当天 / 提前 1 天 / 3 天 / 1 周（默认：当天 + 提前 1 天）。
+- **类型分段控件**：`每年循环` / `累加计天` / `倒数到某天`。
+- **日期行** + **农历开关**（仅每年循环可用）：打开后实时提示「农历 X 月 X 日 · 今年对应公历 …」。
+- 类型=`累加(since)` 时显示**里程碑区**（预设 chips + 自定义「第 N 天」）。
+- **提醒** chips（多选）：当天 / 提前 1 天 / 3 天 / 1 周（默认：当天 + 提前 1 天）。提醒在**每天 09:00**（Asia/Shanghai，v1 固定，可后续做全局设置）弹。
 - 「写点什么」多行文本。
-- 底部**实时预览**：显示它在首页那一行的样子（所见即所得）。
+- 底部**实时预览**：显示它在首页那一行的样子。
 
 ## 5. 数据模型
 
@@ -103,7 +103,7 @@
 | `since` | 从过去累加 | 已经 N 天 + 里程碑 | 起点 | ❌ | ✅ 可配 |
 | `until` | 一次性倒数 | 还有 N 天，过期归回忆 | 目标日 | ❌ | ❌ |
 
-### 表 `occasions`
+### 表 `occasions`（唯一业务表）
 
 ```sql
 create table if not exists public.occasions (
@@ -118,58 +118,31 @@ create table if not exists public.occasions (
   lunar_is_leap boolean not null default false, -- lunar=true 时：该月是否闰月
   cover_path    text,                           -- 'covers' 桶内相对路径 {user_id}/{id}.jpg
   note          text,
-  remind_days   int[]  not null default '{0,1}',            -- 提前几天，0=当天，如 {0,1,7}
+  remind_days   int[]  not null default '{0,1}',            -- 提前几天，0=当天；驱动本地通知排程
   milestones    jsonb  not null default '{"hundreds":true,"thousand":true}'::jsonb,
   leap_fallback text   not null default 'feb28' check (leap_fallback in ('feb28','mar1')),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
-  -- 农历仅用于每年循环的纪念日
   constraint lunar_only_anniversary check ( (not lunar) or (kind = 'anniversary') )
 );
 alter table public.occasions enable row level security;
 
--- updated_at 自动刷新（Postgres 不会自动更新该列）
+-- updated_at 自动刷新
 create or replace function public.set_updated_at() returns trigger
-  language plpgsql as $$
-begin new.updated_at = now(); return new; end; $$;
+  language plpgsql as $$ begin new.updated_at = now(); return new; end; $$;
 drop trigger if exists occasions_set_updated_at on public.occasions;
 create trigger occasions_set_updated_at before update on public.occasions
   for each row execute function public.set_updated_at();
 ```
 
-- **`archived` 不落库**：由运行时 `computeOccasion` 的 `daysBetween<0`（仅 `until`）派生，首页据此分区，单一真相源，避免列与实时计算不一致。
-- **`lunar=true` 权威来源**是 `(lunar_month, lunar_day, lunar_is_leap)`，每次运算/导出按目标公历年重算（§7）。`date` 列仅存创建时换算出的公历基准，用于排序/兜底，不作农历复现依据。
-- **`milestones` 解析语义**：缺省的键按 `false` 处理；列默认 `{"hundreds":true,"thousand":true}`（与新建表单预选一致）。仅 `kind=since` 读取；非法组合（如某行残留 `romantic` 但 kind≠since）在展开时**静默忽略**。
+- **不再需要 `profiles` 表 / `calendar_token`**（webcal 订阅已移除）。
+- **`archived` 不落库**：由运行时 `computeOccasion` 的 `daysBetween<0`（仅 `until`）派生，单一真相源。
+- **`lunar=true` 权威来源**是 `(lunar_month, lunar_day, lunar_is_leap)`，每次运算按目标公历年重算（§7）。`date` 仅存创建时换算的公历基准，用于排序/兜底。
+- **`milestones` 解析**：缺省键按 `false`；列默认 `{"hundreds":true,"thousand":true}`；仅 `kind=since` 读取；非法组合静默忽略。
 
-### 表 `profiles`（含日历订阅 token）
-
-```sql
-create extension if not exists pgcrypto;
-create table if not exists public.profiles (
-  id             uuid primary key references auth.users(id) on delete cascade,
-  calendar_token text not null unique default encode(gen_random_bytes(32),'hex'), -- 256-bit
-  created_at     timestamptz not null default now()
-);
-alter table public.profiles enable row level security;
-
--- 新用户自动建 profile
-create or replace function public.handle_new_user() returns trigger
-  language plpgsql security definer set search_path = '' as $$
-begin
-  insert into public.profiles (id) values (new.id) on conflict do nothing;
-  return new;
-end; $$;
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created after insert on auth.users
-  for each row execute function public.handle_new_user();
-```
-
-- 「重置订阅链接」= 前端 `update profiles set calendar_token = encode(gen_random_bytes(32),'hex') where id = auth.uid()`，旧 webcal 立即失效。走下方 `profiles update own` 策略（前端直连，单用户零风险）。
-
-### RLS（occasions ×4 + storage ×4 + profiles ×2）
+### RLS（occasions ×4 + storage ×4）
 
 ```sql
--- occasions（四操作，using/with check 均 (select auth.uid()) = user_id）
 create policy occasions_select_own on public.occasions for select to authenticated
   using ( (select auth.uid()) = user_id );
 create policy occasions_insert_own on public.occasions for insert to authenticated
@@ -179,15 +152,7 @@ create policy occasions_update_own on public.occasions for update to authenticat
 create policy occasions_delete_own on public.occasions for delete to authenticated
   using ( (select auth.uid()) = user_id );
 
--- profiles（select own + update own；update 两段都限 id，防改归属）
-create policy profiles_select_own on public.profiles for select to authenticated
-  using ( (select auth.uid()) = id );
-create policy profiles_update_own on public.profiles for update to authenticated
-  using ( (select auth.uid()) = id ) with check ( (select auth.uid()) = id );
-
--- covers 私有桶（四操作，路径首段 = user_id）
--- 建桶：insert into storage.buckets (id,name,public) values ('covers','covers',false)
---       on conflict (id) do update set public = false;
+-- covers 私有桶（先建桶 public=false）
 create policy covers_select_own on storage.objects for select to authenticated
   using ( bucket_id='covers' and (storage.foldername(name))[1] = (select auth.uid())::text );
 create policy covers_insert_own on storage.objects for insert to authenticated
@@ -201,11 +166,10 @@ create policy covers_delete_own on storage.objects for delete to authenticated
 
 ### Storage（封面图生命周期）
 
-- 桶 `covers`（**private**）。路径固定 `{user_id}/{id}.jpg`（**覆盖式**，替换封面不产生孤儿）。
-- App 内用 `createSignedUrl` 显示（private 桶）。**封面图不进日历**（日历事件是纯文本）。
-- 上传前 canvas 压缩：最长边 ≤ 1600px、JPEG ≈ 0.8。
-- **删除清理**：删除 occasion 时前端显式 `storage.from('covers').remove([cover_path])`（DB `on delete cascade` 不清 Storage 对象）；「移除封面」同样删对象并置 `cover_path=null`。
-- **签名 URL 缓存**：覆盖式命名下，用 `?v={updated_at}` 之类做缓存击穿，避免换图后仍显示旧图。
+- 桶 `covers`（**private**）。路径固定 `{user_id}/{id}.jpg`（覆盖式，替换不产生孤儿）。
+- App 内 `createSignedUrl` 显示；上传前 canvas 压缩（最长边 ≤1600px、JPEG ≈0.8）。
+- 删除 occasion / 移除封面时**显式** `storage.from('covers').remove([cover_path])`（cascade 不清 Storage）。
+- 签名 URL 用 `?v={updated_at}` 缓存击穿。
 
 ## 6. 领域计算 `lib/occasion.ts`（纯函数，最该被测）
 
@@ -215,134 +179,114 @@ create policy covers_delete_own on storage.objects for delete to authenticated
 type LeapFallback = 'feb28' | 'mar1';
 type OccasionKind = 'anniversary' | 'since' | 'until';
 
-isLeap(y): boolean
-daysInMonth(y, m): number
-diffDays(a: CivilDate, b: CivilDate): number          // Math.round((UTC(b)-UTC(a))/86400000)
-addDays(c, n): CivilDate
-addMonthsClamped(c, n): CivilDate                      // Jan31 +1月 -> Feb28（clamp 月末，不回弹）
-anchorInYear(anchor, year, fb): CivilDate              // 2/29 平年落 2/28 或 3/1
-nextAnniversaryDateSolar(anchor, today, fb): CivilDate // 公历 anniversary 下次
-nextAnniversaryDateLunar(spec, today): CivilDate|null  // 农历 anniversary 下次（见 §7）
-completedMonths(from, to): number                      // 满周期截断（anchor-day 感知）
-completedYears(from, to): number
+isLeap(y) / daysInMonth(y,m)
+diffDays(a, b): number                    // Math.round((UTC(b)-UTC(a))/86400000)
+addDays(c, n) / addMonthsClamped(c, n)    // Jan31+1月->Feb28，不回弹
+anchorInYear(anchor, year, fb)            // 2/29 平年落 2/28 或 3/1
+nextAnniversaryDateSolar(anchor, today, fb)
+nextAnniversaryDateLunar(spec, today)     // 见 §7，可能 null
+completedMonths(from, to) / completedYears(from, to)  // 满周期截断，anchor-day 感知
 computeOccasion(o, today): OccasionState
 ```
 
-`OccasionState`：
-- `since`：`daysBetween=已过天数(≥0)`，`years/months=满年/满月`，`nextDate=null`。
-- `until`：`daysBetween=剩余天数(可负=已过→归回忆)`，`nextDate=目标日`。
-- `anniversary`：`daysBetween=距下次天数`，`years=已满周岁`，`nextDate=下次发生日`（公历或农历分支）。
+`OccasionState`：`since`→`daysBetween=已过(≥0)`,`years/months`,`nextDate=null`；`until`→`daysBetween=剩余(可负→归回忆)`,`nextDate=目标`；`anniversary`→`daysBetween=距下次`,`years=周岁`,`nextDate=下次(公/农历分支)`。
 
-**边界规则（写死 + 测试）**：
-- 闰年 2/29：平年默认回退 **2/28**（`leap_fallback` 可切 `mar1`），UI 标注「今年按 2/28 计」。因导出改为逐年展开 dated 事件（§8），`mar1` 在 ICS 中也能忠实表达。
-- `completedMonths`：按「日是否到达锚点日（按目标月 clamp）」判断，2/15→3/14=0、3/15=1；1/31→2/28 满月边界；`addMonthsClamped` 不回弹。
-- 「今天恰好到达」= 单独 `isToday` 态（既非 achieved 也非未来），文案一致。
+**边界**：闰年 2/29 平年默认 2/28（可切 mar1）；`completedMonths` 按「日到没到锚点日(目标月 clamp)」判断，2/15→3/14=0、3/15=1；「今天到达」= 单独 `isToday` 态。
 
 ### 里程碑（**仅 `since`**）
 
-`milestones` jsonb schema：
 ```jsonc
-{ "hundreds": true,   // 每 100 天
-  "thousand": true,   // 第 1000 天
-  "monthly":  false,  // 每满一个月（addMonthsClamped，真实日历月，非 30 天近似）
-  "romantic": false,  // 第 520、1314 天
-  "customDays": [888] // 自定义「第 N 天」
-}
+{ "hundreds": true, "thousand": true, "monthly": false, "romantic": false, "customDays": [888] }
 ```
 
-```ts
-interface Milestone { key: string; label: string; date: CivilDate;
-  dayOffset: number|null; achieved: boolean; isToday: boolean; isNext: boolean }
-
-expandMilestones(o, today, horizonDays=366*60): Milestone[]   // 仅 since：起点+偏移天数展开、去重、排序、标 isNext
-expandAnniversaryMilestones(anchor, today, fb, maxYears=100): Milestone[]  // 周年+年龄
-```
-
-- `expandMilestones`：`since` 专用。`until`/`anniversary` 不调用。去重（同一天多规则取首个），升序，`isNext = 第一个未达成`，`horizon` 上界防无限展开，`customDays` 去重/clamp。
-- `expandAnniversaryMilestones`：复用 `Milestone` 类型，`dayOffset=null`（周年非固定天偏移），`label` 用「第 N 周年 / N 岁」。例：`{key:'y10', label:'第 10 周年', date: 锚点+10年那天, dayOffset:null, ...}`。
-- `romantic` 仅 `since` 语义合理；`monthly` 亦 `since` 专属。非法组合静默忽略。
+- `expandMilestones(o, today, horizonDays)`：仅 since，起点+偏移天数展开、去重、升序、标 `isNext`；`monthly` 用 `addMonthsClamped`（真实日历月，非 30 天近似）；`horizon` 有上界；`customDays` 去重/clamp。
+- `expandAnniversaryMilestones(anchor, today, fb, maxYears)`：复用 `Milestone` 类型，`dayOffset=null`，label「第 N 周年 / N 岁」。
+- `romantic`/`monthly` 仅 since；非法组合静默忽略。
 
 ## 7. 农历 `lib/lunar.ts`（`lunar-typescript`，仅 anniversary）
 
 - 闰月 = **负月份**：`Lunar.fromYmd(y, isLeap ? -Math.abs(m) : m, d).getSolar()`。
-- **一个公历年可能命中 0/1/2 次**：`lunarToSolarInYear(spec, gYear)` 扫 `[gYear-1, gYear, gYear+1]`，过滤 `solar.getYear() === gYear`，返回**升序数组**。
-- 守卫：闰月先 `LunarYear.fromYear(ly).getLeapMonth() === Math.abs(m)` 再 try/catch（不存在的闰月会 **throw**）；短月用 `LunarMonth.fromYm(ly, signedMonth).getDayCount()` 判断该日是否存在。
-- 输出用 `new Date(solar.getYear(), solar.getMonth()-1, solar.getDay())` 或 `{y,m,d}`，**绝不** `toISOString()`。
-- **下次发生日**：从 `today` 起，把 `[gy, gy+1, …]` 每年的全部命中日期拉平、过滤 `> today`、**取最小**。搜索窗口 **25 年**（闰月纪念日间隔可达 ~19 年，如闰二月 2023→2042）；窗口内无命中返回 `null`，UI 诚实显示「下次在 YYYY 年」或「近年无对应农历日」，**不做**回落开关（YAGNI）。
+- **一个公历年可能命中 0/1/2 次**：`lunarToSolarInYear(spec, gYear)` 扫 `[gYear-1, gYear, gYear+1]`，过滤 `solar.getYear()===gYear`，返回升序数组。
+- 守卫：闰月先 `LunarYear.fromYear(ly).getLeapMonth()===Math.abs(m)` 再 try/catch（不存在的闰月 throw）；短月用 `LunarMonth.fromYm(ly, signedMonth).getDayCount()`。
+- 输出 `new Date(getYear, getMonth-1, getDay)` 或 `{y,m,d}`，**绝不** `toISOString()`。
+- **下次发生日**：从 today 起把 `[gy, gy+1, …]` 全部命中拉平、过滤 `>today`、取最小；窗口 **25 年**（闰月间隔可达 ~19 年）；无命中返回 `null`，UI 诚实显示「下次在 YYYY 年」。
 
-## 8. 日历订阅 `/api/cal/[token].ics`（Vercel serverless）
+## 8. 提醒投递 `lib/reminders.ts` + Capacitor 本地通知（核心）
 
-**动态生成**：每次被拉取时以「当前年」为基准实时重算，天然向后滚动补充。
+> **机制**：纯设备本地、零后端参与。app 用 `@capacitor/local-notifications` 把「未来的提醒」逐条排进系统 **AlarmManager**；到点由**系统**（不是 app 进程）弹通知，因此 **app 关闭 / 进程被杀 / 无网络都能响**——这是本地闹钟相对「后台轮询 / FCM 推送」的根本优势，也是国行安卓（含无 GMS 的华为）唯一可靠的路（附录 E/F）。Supabase 只是数据真源，**不参与投递**。
 
-- token：64-hex（`gen_random_bytes(32)`）。URL：`webcal://<APP_HOST>/api/cal/<token>.ics`（`<APP_HOST>` 来自 §14 的 base-url env）。
-- **安全**（service-role 绕 RLS，边界全在应用层）：
-  - token 形状不符 `^[0-9a-f]{64}$` → **404**。
-  - 按 token 查 `profiles` 拿 `user_id`，查不到 → **404**（不泄露存在性，不返 401）。
-  - 查 occasions **必须手动 `.eq('user_id', user_id)`**（无 RLS 兜底，漏写=全表泄露）。
-  - service-role key 只在 serverless env，**绝不**带 `VITE_/NEXT_PUBLIC_` 前缀。
-  - 响应 `Content-Type: text/calendar; charset=utf-8`；`Cache-Control: private, max-age` 短时；别进公共 CDN。
+### 8.1 排程逻辑（纯函数 `computeReminderTimes`，可测）
 
-### 事件生成：**全部为 dated（一次性）全天 VEVENT，不用 RRULE**
+输入全部 occasions + 今天 → 输出一个**按时间升序、去重、截断到最近 N 条**的通知列表 `{ at: Date(本地时刻), title, body, occasionId }[]`：
 
-> 决策（见 §13）：放弃 RRULE、把循环事件也逐年展开为 dated 事件。换来统一的「当天 09:00」提醒、`mar1`/2·29 忠实表达、农历 0/1/2 次自然处理——单一代码路径。代价：ICS 略大（每纪念日约 10 条），超窗口靠 feed 滚动刷新补齐（动态端点已保证）。
+1. 对每个 occasion 取其未来关键日期：
+   - `anniversary`：未来窗口内的下次发生日（公历/农历，可多年）。
+   - `since`：`expandMilestones` 里 `isNext` 及其后若干个里程碑日期。
+   - `until`：目标日（未过期时）。
+2. 对每个关键日期 × 每个 `remind_days` 偏移 d → 提醒时刻 = `(关键日 − d 天) 当天 09:00`（Asia/Shanghai）。
+3. 过滤未来、按时间升序、去重、**截断到最近 64 条**（iOS 硬上限 64；Android 也用同一上界，够个人 app 覆盖数月~数年）。
+4. `title` = occasion 标题；`body` = 「今天是…」/「还有 N 天」/「满 1000 天」等；点击 deep-link 回 app 对应详情。
 
-- `anniversary`（公历）：对 `[今年 .. 今年+9]` 每年用 `anchorInYear(anchor, y, leap_fallback)` 得一天 → 每年一条 VEVENT（约 10 条）。2/29 由 `anchorInYear` 处理（feb28/mar1）。
-- `anniversary`（农历）：对窗口每年调 `lunarToSolarInYear` → **命中几次生成几条**（0/1/2 均可）。**闰月日**：普通窗口若 0 命中，则把窗口延伸到「下一次命中」（≤25 年），保证 ICS **至少 1 条**、纪念日不「消失」。
-- `since` 里程碑（仅 since）：`isNext` 及窗口内后续若干个 → 每个一条 VEVENT。
-- `until`：未过期则一条 VEVENT。
-- 每条 VEVENT：`DTSTART;VALUE=DATE:YYYYMMDD`，`DTEND;VALUE=DATE` = **次日**（排他）；稳定 `UID`（如 `{occasionId}-{YYYYMMDD}@<host>`）+ `DTSTAMP`；CRLF/折行/中文 UTF-8 由 `ical-generator` 保证。
-- **VALARM（提醒）**：因全部是 dated 事件，对每个 `remind_days` 值用**绝对触发**在「事件日前 d 天的当地 09:00」响：`TRIGGER;VALUE=DATE-TIME:...Z`，09:00 按固定应用时区 `Asia/Shanghai`(UTC+8) 换算（09:00 CST = 01:00Z）。
-- **窗口是两个独立参数**：ICS 导出窗口（普通 10 年 / 闰月延伸至下一次命中）与 §7「找下次」搜索窗口（25 年）**勿共用常量**。
+### 8.2 接入 Capacitor（落地要点，含 schedule-app 现存坑）
 
-### 现实（写进产品文案）
+- **首启权限**：`LocalNotifications.requestPermissions()`（Android 13+ 的 `POST_NOTIFICATIONS`）。
+- **精确闹钟**（决定「准不准点」）：在 `android/app/src/main/AndroidManifest.xml **显式加**：
+  - `<uses-permission android:name="android.permission.USE_EXACT_ALARM"/>`（sideload APK 安装即授予、免弹窗、纪念日属允许类目）
+  - 兜底 `<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>`（Android 12/13）
+  - ⚠️ **schedule-app 现在缺这两条**，导致 Android 12+ 静默降级成不精确闹钟、到点漂移几十分钟——本项目必须补上。
+- 所有 `schedule()` 带 **`allowWhileIdle: true`**（穿透 Doze）。
+- **重排模型**：app 每次打开/回前台 → 从 Supabase 全量拉取 → `cancel` 全部 pending → 按 §8.1 重排（复用 schedule-app 的 syncNotifications 模式）。天然解决「跨设备新增的日子让本机重排」+「iOS 64 上限」+「改了日子提醒同步」。
+- **开机重排**：插件自带 `RECEIVE_BOOT_COMPLETED` receiver，无需另配。
+- **启动复查**：`checkExactNotificationSetting()`；用户若在系统里关了精确闹钟，重排。
+- **不做后台定期同步**（国行安卓不可靠且本地闹钟不需要）：靠「打开即重排 + 通知 deep-link 引导回 app」。
 
-系统日历刷新低频且不可控（iOS 1–3h，Google 8–24h 且无手动刷新，`X-PUBLISHED-TTL`/`REFRESH-INTERVAL` 只能放慢不能加快）。**提醒不保证即时生效**；App 内首页始终是「实时」那份，日历是「最终会同步」的镜像。
+### 8.3 OEM 保活引导（决定性，做成一个真功能页）
 
-## 9. 认证与 Auth 超时修复
+vivo/小米/华为的后台清理会杀掉排程/压制通知——**这是「可靠」与否的决定因素，代码解决不了**，必须引导用户手动开：
 
-- **magic-link**：`supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo } })`。纯自用 → 关闭公开注册 / 邮箱 allowlist 只放行本人。
-- **焊入 schedule-app 教训**：
-  - 启动 `getSession()` 用 `Promise.race([getSession(), 3s 超时])`；**超时先乐观渲染**（`ready=true, confirmed=false`），不卡 spinner、不把用户踢去登录页（超时≠未登录）。
-  - `onAuthStateChange` 拿到真 session 再纠正（`confirmed=true`）。
-  - **回调内任何 supabase 调用必须 `setTimeout(fn, 0)` 推迟**，否则触发 supabase-js 已知死锁。
-- 前端只用 anon key（受 RLS 约束）。
+- 一个「让提醒更准时」引导页，按机型（vivo/小米/华为/其他）给图文步骤：**自启动放行 + 电池设为不受限/不优化 + 最近任务锁定 app + 通知权限（横幅/锁屏/勿扰白名单）**。
+- 一个「**发送测试提醒**」按钮：~10 秒后弹一条本地通知，让用户当场验证生效。
+- dontkillmyapp 排名参考：华为#1、小米#2 最凶；**vivo #11 相对温和**（对作者主力机是利好）。
+
+### 8.4 iPhone（v1 只读）
+
+iPhone 用 Web/PWA **查看**，v1 **不保证提醒**（次要）。v1.1 可选：Capacitor iOS 原生本地通知（需 Mac + Apple 开发者账号），或 PWA + APNs Web Push（APNs 在国内可达，需加主屏 + 后端 VAPID + 容错订阅失效）。
+
+## 9. 认证
+
+- **magic-link**：`signInWithOtp({ email, options:{ emailRedirectTo } })`。纯自用 → 关闭公开注册 / 邮箱 allowlist 只放行本人。
+- **Capacitor 内回跳**：magic-link 回调走 deep link（自定义 scheme / App Links）交换 session（复用 schedule-app 的 Supabase-in-Capacitor 认证模式）。
+- **焊入 schedule-app 教训**：`getSession()` 用 `Promise.race([getSession(), 3s 超时])` → 超时先乐观渲染（不卡转圈、超时≠未登录）；`onAuthStateChange` 拿到真 session 再纠正；**回调内任何 supabase 调用必 `setTimeout(fn,0)` 防死锁**。
+- 前端只用 anon key（受 RLS 约束；**无 service-role**，因为没有 serverless）。
 
 ## 10. 错误处理与边界
 
-- 农历某年无命中（闰月/短月）：`lunarToSolarInYear` 返回空数组；「下次」诚实显示未来年份或「近年无对应」，不静默让提醒消失（ICS 端已保证闰月日至少 1 条）。
-- 图片上传失败/超限：压缩后再传；失败 toast 可重试（参考 ledger toast 规范：多行、可点关、错误延时长）。
-- `until` 过期：运行时按 `daysBetween<0` 归入「回忆」，可手动编辑目标日改回（无持久 archived 列，不会互相打架）。
-- 订阅 token 泄露：详情/设置「重置订阅链接」一键 rotate。
-- 空态：无日子时首页引导「记下第一个重要的日子」。
-- 封面：无封面时首页大卡/详情框图用纯色占位（`--bg-tertiary` + 标题首字），不破图。
+- 农历某年无命中（闰月/短月）：`lunarToSolarInYear` 返回空；「下次」诚实显示未来年份，提醒排到那时。
+- 图片上传失败/超限：压缩后再传；失败 toast 可重试（参考 ledger toast 规范）。
+- `until` 过期：运行时 `daysBetween<0` 归「回忆」，可编辑目标日改回。
+- 通知权限被拒 / 精确闹钟被关：引导页明确提示 + 「发送测试提醒」自检；降级到不精确闹钟仍能响（只是可能漂移）。
+- 空态：首页引导「记下第一个重要的日子」。
+- 封面缺失：纯色占位（`--bg-tertiary` + 标题首字）。
 
 ## 11. 测试策略
 
-- **`lib/occasion.ts` / `lib/lunar.ts` 纯函数**（vitest 重点，TDD）：
-  - `diffDays` 跨年/跨月/同日=0；时区/DST 不「差一天」。
-  - 2/29 生日平年（feb28 / mar1 两种）；下次发生日跨年。
-  - `completedMonths`：2/15→3/14=0、3/15=1；1/31→2/28 满月边界；`addMonthsClamped` 不回弹。
-  - 里程碑（仅 since）：hundreds/thousand/monthly/romantic/custom 展开、去重、`isNext`、`isToday` 边界、horizon 上界；`until`/`anniversary` 不产出 since 里程碑。
-  - 农历：`(8,15,false)@2026→[9/25]`；`(12,1,false)@2024→[1/10, 12/30]`（一年两次）；`(2,1,true)@2024→[]`（无闰二月）；`(9,30,false)@2024→[]`（九月 29 天）；「下次」跨 ~19 年闰月。
-- **`.ics` 生成**（快照 + 解析器校验）：
-  - 每条含 UID/DTSTAMP、DTEND=次日（排他）、无 RRULE。
-  - 公历 anniversary 展开约 10 条；2/29 平年落 2/28（或选 mar1 时落 3/1）。
-  - 农历某年 2 命中 → 该年 2 条；闰月日 ICS 非空（延伸窗口生效）。
-  - VALARM 绝对触发、09:00 CST=01:00Z 换算正确、每个 `remind_days` 一条。
-  - **库冒烟**：确认 `ical-generator` 输出 `DTEND` 排他、绝对 `VALARM`、稳定 `UID`（实现前一条冒烟测试验证）。
-- **`/api/cal` 鉴权**：坏 token→404、无此 token→404、正确 token 只回本人数据（`.eq('user_id')` 回归）。
-- **组件/交互**（Testing Library）：类型切换改字段语义；农历开关仅 anniversary 可用；里程碑区仅 since 出现；封面替换/移除。
-- **e2e**（Playwright）：新建三种类型各一条 → 首页/详情正确 → 生成订阅链接可访问；CI 注入 stub `VITE_SUPABASE_*` + base-url 防真实构建白屏（参考 ledger CI 经验）。
+- **纯函数**（vitest 重点，TDD）：
+  - `lib/occasion.ts`：`diffDays` 时区不差一天；2/29 平年 feb28/mar1；`completedMonths` 2/15→3/14=0、3/15=1；1/31→2/28；`addMonthsClamped` 不回弹；里程碑（仅 since）展开/去重/`isNext`/`isToday`。
+  - `lib/lunar.ts`：`(8,15,false)@2026→[9/25]`；`(12,1,false)@2024→[1/10,12/30]`（一年两次）；`(2,1,true)@2024→[]`；`(9,30,false)@2024→[]`；下次跨 ~19 年闰月。
+  - `lib/reminders.ts`（`computeReminderTimes`）：09:00 本地时刻；`remind_days` 偏移；三类型关键日期正确；里程碑/农历并入；升序去重；**截断到 64**；跨设备数据变化后重排结果幂等。
+- **Capacitor 集成/手动**：权限申请流；打开即重排；精确闹钟权限存在性；**真机矩阵手测**（vivo 重点 + 小米/华为）：保活设置后「发送测试提醒」+ 到点提醒到达。
+- **组件/交互**（Testing Library）：类型切换改字段语义；农历开关仅 anniversary；里程碑区仅 since；封面替换/移除；OEM 引导页按机型渲染。
+- **e2e**（Playwright，web 版）：新建三类型 → 首页/详情正确；CI 注入 stub `VITE_SUPABASE_*` + base-url 防真实构建白屏。
 - **CI**：Node 24、`npm ci`、lint（ESLint+Prettier）先本地跑绿再推。
 
 ## 12. 交付顺序（粗切，细化留给 writing-plans）
 
-1. 脚手架 + Supabase schema/RLS/Storage/触发器 + 环境变量 + 部署管线打通（能登录、建一条、刷新看到）。
+1. 脚手架 + Supabase schema/RLS/Storage/触发器 + 环境变量 + **Capacitor Android 壳打通**（复用 schedule-app 配置/keystore）+ magic-link 登录。
 2. `lib/occasion.ts` + `lib/lunar.ts` + 全套单测（先纯逻辑，TDD）。
 3. 首页 A + 详情 ② + 新建/编辑表单（类型切换、农历开关、里程碑区、实时预览、封面增改删）。
-4. `/api/cal/[token].ics`（dated 展开 + 09:00 VALARM）+ 订阅入口 + token 重置。
-5. 视觉打磨（对照 Claude/Apple 设计审查）+ PWA 装主屏 + 空态/错误态。
-6. 测试补齐 + CI 绿 + 上线子域名。
+4. `lib/reminders.ts`（`computeReminderTimes`）+ Capacitor 本地通知接入 + **manifest 精确闹钟权限** + syncNotifications 重排 + 首启权限申请。
+5. **OEM 保活引导页 + 「发送测试提醒」** + 视觉打磨（对照 Claude/Apple 审查）+ 空错态。
+6. 测试补齐 + CI 绿 + **真机验证（vivo 重点）** + 出 APK + web 版上线子域名。
 
 ## 13. 已解决的取舍一览
 
@@ -350,21 +294,20 @@ expandAnniversaryMilestones(anchor, today, fb, maxYears=100): Milestone[]  // �
 |---|---|---|
 | 核心形态 | 混合（提醒+记录+倒数） | 用户选 D |
 | 用户 | 纯单用户、需登录 | 用户选 A |
-| 农历 | 公历为主、农历可选；**仅 anniversary** | 用户选 C + 审查收敛 |
-| 提醒方式 | 导出/订阅系统日历（webcal，无推送） | 用户选 C |
+| 农历 | 公历为主、可选；**仅 anniversary**（DB CHECK） | 用户选 C + 审查 |
+| **提醒机制** | **Capacitor 本地通知（设备本地 AlarmManager）** | 跨机型+推送 2 轮核验 |
+| ~~webcal 订阅~~ | **移除**（国产安卓自带日历不支持订阅） | 跨机型核验 |
+| ~~服务器 Web Push/FCM~~ | **否**（华为无 GMS、vivo/小米 FCM 被墙不通） | 推送核验 high |
+| ~~厂商推送 SDK~~ | **否**（vivo/OPPO 要企业账号+上架，过度工程） | 推送核验 |
+| 平台 | **v1 安卓优先（vivo 重点）**；iPhone 网页只读，提醒 v1.1 | 用户「iPhone 次要」 |
 | 记录内容 | 文字 + 一张封面图 | 用户选 B |
-| 存储 | Supabase 云端 + 跨设备 | 用户选 B |
+| 存储 | Supabase 云端 + 跨设备（仅数据/图片/认证） | 用户选 B |
 | 日子类型 | anniversary / since / until 全要 | 用户「全要」 |
-| 里程碑 | 预设+自定义；**仅 since**；anniversary=周年+年龄 | 用户补充 + 审查收敛 |
-| 首页版式 | A 近期聚焦 | 可视化伴侣 |
-| 详情气质 | ② 编辑排版 | 可视化伴侣 |
-| 配色 | Claude 暖白 `#FAF9F7` + 黏土 `#C96442` | 用户「照抄 Claude 可以」 |
-| **日历事件** | **全部 dated 展开、不用 RRULE、当天 09:00 绝对提醒** | 审查（RRULE 只能午夜、2/29/mar1 表达难） |
-| **archived** | **运行时派生、不落库** | 审查（避免双真相源） |
-| **pinned** | **v1 删除** | 审查（悬空字段，YAGNI） |
-| 2/29 平年 | 默认 2/28（可切 3/1），ICS 逐年忠实表达 | 领域核验 |
-| 农历一年 0/1/2 次 | nextDate=拉平取最小；ICS 命中几条出几条；闰月延伸窗口 | 审查 |
-| token | `gen_random_bytes(32)` hex（256-bit）；rotate 走 update-own | Supabase 核验 + 审查 |
+| 里程碑 | 预设+自定义；**仅 since**；anniversary=周年+年龄 | 用户 + 审查 |
+| 首页/详情/配色 | A 近期聚焦 / ② 编辑排版 / Claude 暖白 `#FAF9F7`+黏土 `#C96442` | 可视化伴侣 |
+| archived / pinned | archived 运行时派生不落库；pinned 删除 | 审查 |
+| 精确闹钟 | manifest 加 `USE_EXACT_ALARM`（修 schedule-app 现存漂移坑） | 本地通知核验 |
+| 提醒时刻 | 每天 09:00（Asia/Shanghai，v1 固定） | 设计选择 |
 
 ## 14. 环境变量与部署清单
 
@@ -372,42 +315,36 @@ expandAnniversaryMilestones(anchor, today, fb, maxYears=100): Milestone[]  // �
 |---|---|---|
 | `VITE_SUPABASE_URL` | 前端（打包公开） | Supabase 项目 URL |
 | `VITE_SUPABASE_ANON_KEY` | 前端（打包公开） | anon key，受 RLS 约束 |
-| `VITE_PUBLIC_BASE_URL` | 前端（打包公开） | app origin：拼 `emailRedirectTo`、给用户展示/复制 webcal 订阅链接 |
-| `SUPABASE_URL` | **仅 serverless** | `/api/cal` 用 |
-| `SUPABASE_SERVICE_ROLE_KEY` | **仅 serverless**（绝不带 VITE_ 前缀） | `/api/cal` 绕 RLS 读数据；泄露=全库钥匙 |
-| `APP_HOST` | serverless（可由 base-url 推导） | 生成 `webcal://<host>/...` 与 VEVENT UID 域 |
-| `APP_TZ`（常量 `Asia/Shanghai`） | serverless | VALARM 09:00→UTC 换算 |
+| `VITE_PUBLIC_BASE_URL` | 前端（打包公开） | app origin：拼 magic-link `emailRedirectTo`（Capacitor 内为 deep link scheme） |
+| `APP_TZ`（常量 `Asia/Shanghai`） | 前端 | 09:00 提醒时刻计算 |
 
-- **CI stub**：注入 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_PUBLIC_BASE_URL` 假值，避免真实构建因缺 env 白屏（ledger 经验）。
-- **Vercel**：前端 env（VITE_ 前缀）+ serverless env（service-role）分开配置；serverless 函数放 `/api/cal/[token].ts`。
+- **无 service-role key、无 serverless**（webcal 移除后不需要）。
+- **CI stub**：注入 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`/`VITE_PUBLIC_BASE_URL` 假值防白屏。
+- **Capacitor**：复用 schedule-app 的 `capacitor.config`、Android 工程与 `.keystores-backup` 签名；APK sideload 分发。
 
 ---
 
-## 附录：已核验技术事实（4 路并行 agent，均 high confidence）
+## 附录：核验结论（多路并行 agent，均 high/medium confidence）
 
-> 完整原始结论见会话工作流 `anniversary-spec-research`（run `wf_0868c0d7-0a7`）；spec 又经 `anniversary-spec-review`（run `wf_0e39129d-a94`）3 视角审查收敛。
+> 工作流：`anniversary-spec-research`（4 路技术核验）、`anniversary-spec-review`（3 视角审查）、`calendar-delivery-cross-oem`（4 机型）、`push-mechanism-cn-android`（3 路推送机制）。
 
-### A. webcal/.ics
-- Vercel serverless 动态生成完整 VCALENDAR；本 spec 采用**全 dated 展开**（不用 RRULE），换取统一 09:00 提醒与简单的 2/29/农历处理。
-- 全天事件 `DTSTART;VALUE=DATE` + `DTEND` 次日（排他）；VEVENT 必须 `UID`+`DTSTAMP`；CRLF + 75 字节折行 + 转义 → 用 `ical-generator` 别手拼。
-- dated 事件可用**绝对 VALARM**（本地 09:00 = UTC−8h），观感优于 RRULE 的午夜相对触发。
-- 刷新不可控（iOS 1–3h / Google 8–24h）；`X-PUBLISHED-TTL`/`REFRESH-INTERVAL` 只能放慢。
-- token = capability URL：免登录、不可枚举、404 不 401、可 rotate、别放敏感文字、no-store。
+### A. 农历 lunar-typescript（6tail v1.8.6，MIT，零依赖，带 .d.ts，实测）
+- 闰月=负月份（非 isLeap 布尔）；农历年整数≠目标公历年 → 扫 `[gy-1,gy,gy+1]` 过滤 `getYear()===gy`，返回数组（0/1/2 次）；守卫 `getLeapMonth()`/`getDayCount()`；`toISOString()` 会 UTC+8 挪错一天。
 
-### B. lunar-typescript（6tail v1.8.6，MIT，零依赖，带 .d.ts，实测）
-- `Lunar.fromYmd(y, signedMonth, d).getSolar()`；闰月 = 负月份（非 isLeap 布尔）。
-- 农历年整数 ≠ 目标公历年 → 扫 `[gy-1,gy,gy+1]` 过滤 `getYear()===gy`，返回数组（0/1/2 次）。
-- 守卫：`LunarYear.getLeapMonth()`（不存在的闰月 throw）、`LunarMonth.getDayCount()`（短月无 30）。
-- `toISOString()` 会在 UTC+8 挪错一天；一律 `getYear/getMonth/getDay` 拼。
+### B. 领域计算
+- `CivilDate{y,m,d}`+`Date.UTC(..,12,..)`+`Math.round`；2/29 平年默认 2/28；`addMonthsClamped` 不回弹；`completedMonths/Years`=满周期截断；`monthly` 按真实日历月；`romantic`/里程碑仅 since。
 
 ### C. Supabase 单用户
-- occasions RLS 4 条 `(select auth.uid()) = user_id`；covers **private** 桶 `(storage.foldername(name))[1] = auth.uid()::text` 4 条；profiles select/update own。
-- `calendar_token`：`encode(gen_random_bytes(32),'hex')`（256-bit，比裸 uuid 抗枚举）。
-- `/api/cal` service-role **必须手动 `.eq('user_id')`**；key 仅 serverless env。
-- getSession `Promise.race` 超时→乐观渲染；`onAuthStateChange` 回调调 supabase 必 `setTimeout(fn,0)` 防死锁。
+- occasions RLS 4 条 `(select auth.uid())=user_id`；covers **private** 桶 `(storage.foldername(name))[1]=auth.uid()::text` 4 条；auth `getSession` 超时乐观渲染 + `onAuthStateChange` 回调 `setTimeout(fn,0)` 防死锁；前端仅 anon key。
 
-### D. 领域计算
-- `CivilDate{y,m,d}` + `Date.UTC(..,12,..)` 正午锚点 + `Math.round` 天差；不混 UTC/本地午夜。
-- 2/29 平年默认 2/28（可切 3/1）；`addMonthsClamped` 月末 clamp 不回弹。
-- `completedMonths/Years` = 满周期截断（anchor-day 感知），非 `(y2-y1)*12+(m2-m1)`。
-- `monthly` 里程碑按真实日历月非近似；`romantic`/里程碑仅 since；horizon 有上界。
+### D. 跨机型日历订阅（为何移除 webcal）
+- iPhone 原生支持订阅 webcal（但需手动开「订阅日历事件提醒」开关）；**vivo 自带日历无订阅入口、导入也不行**；小米 HyperOS 入口被隐藏/不可靠；**华为无订阅、无 GMS，纯血鸿蒙连第三方 app 都装不了**（`unreliable`）。→ 系统日历路线在国产安卓走不通。
+
+### E. 服务器 Web Push / FCM（为何否掉）
+- Web Push（含 TWA）传输走 FCM，依赖设备端 GMS + 连通 Google FCM 服务器；国行 **华为无 GMS 全断、vivo/小米无可用 GMS 且 FCM 被墙**，app 关着投递必败（`broken`，high confidence）。iOS PWA Web Push 走 APNs 国内可达，但需加主屏+订阅易失效（留 v1.1）。
+
+### F. Capacitor 本地通知（选定机制，high confidence）
+- 设备本地 AlarmManager 排程，**系统投递**，app 关闭/杀进程/无网都能响，不碰 FCM/GMS/跨境（华为也能用）。
+- 必加 `USE_EXACT_ALARM`（+`SCHEDULE_EXACT_ALARM` 兜底），否则静默降级不精确（schedule-app 现存坑）；`allowWhileIdle:true`；插件自带开机重排；iOS 64 条上限 → 打开即滚动重排最近 64。
+- 决定性变量是 **OEM 保活/通知权限**（华为#1/小米#2 最凶、vivo #11 温和），须首启引导用户手动放行 + 「发送测试提醒」自检。
+- 厂商远程推送（小米/vivo/华为 SDK、个推/极光）对纯倒数需求属过度工程（vivo/OPPO 要企业账号+上架），不做。

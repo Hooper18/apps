@@ -1,5 +1,7 @@
 # Claude Code local settings
 .claude/
+!cumcm-toolkit/.claude/
+!cumcm-toolkit/.claude/**
 .superpowers/
 STEP1_*.md
 STEP1_*.sql

@@ -162,6 +162,27 @@ describe('Charts 分类钻取：每日汇总行', () => {
     expect(screen.getAllByText('三餐')).toHaveLength(2)
   })
 
+  it('外币交易显示原币金额副行，超长备注完整显示不截断', () => {
+    transactionsRef.value = [
+      ...transactionsRef.value,
+      tx({
+        id: 't9', amount: 15, date: dstr(9), category_id: 'cat-food',
+        description: '晚饭 马来西亚肉骨茶老店 和同事 AA 之后我付的部分',
+        currency: 'MYR', exchange_rate: 1.5,
+      }),
+    ]
+    drillIntoFood()
+    fireEvent.click(screen.getByText('9日'))
+
+    // 换算金额（15 / 1.5 = 10）+ 原币副行（原始：RM 15.00）
+    expect(screen.getByText('-¥ 10.00')).toBeTruthy()
+    expect(screen.getByText('原始：RM 15.00')).toBeTruthy()
+    // 超长备注完整渲染
+    expect(screen.getByText('晚饭 马来西亚肉骨茶老店 和同事 AA 之后我付的部分')).toBeTruthy()
+    // CNY 交易不显示原币副行（面板里只有 MYR 这一条有）
+    expect(screen.getAllByText(/^原始：/)).toHaveLength(1)
+  })
+
   it('键盘 Enter/空格 也能展开与收起（行可聚焦）', () => {
     drillIntoFood()
     const row = screen.getByText('5日').closest('[role="button"]')!

@@ -952,11 +952,19 @@ export default function Charts() {
                                 <div className="border border-gray-100 rounded-xl p-3 my-1.5 bg-gray-50">
                                   <div className="space-y-2">
                                     {catDayTxs.map(tx => (
-                                      <div key={tx.id} className="flex items-center gap-2">
+                                      <div key={tx.id} className="flex items-start gap-2">
                                         <span className="text-lg shrink-0">{tx.categories?.icon ?? '📦'}</span>
-                                        <p className="flex-1 min-w-0 text-sm text-gray-700 truncate">
-                                          {tx.description || (tx.categories?.name ?? t('uncategorized'))}
-                                        </p>
+                                        <div className="flex-1 min-w-0">
+                                          {/* 备注是明细的核心信息：完整换行显示，不截断 */}
+                                          <p className="text-sm text-gray-700 break-words leading-relaxed">
+                                            {tx.description || (tx.categories?.name ?? t('uncategorized'))}
+                                          </p>
+                                          {tx.currency !== dispCurrency && (
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                              {t('originalLabel')}{CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency} {fmt(tx.amount)}
+                                            </p>
+                                          )}
+                                        </div>
                                         <span className={`text-sm font-semibold shrink-0 ${catType === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
                                           {catType === 'expense' ? '-' : '+'}{symbol} {fmt(cvtTx(tx.amount, tx.currency, tx.exchange_rate))}
                                         </span>

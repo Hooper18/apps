@@ -10,7 +10,7 @@ import {
 } from 'chart.js'
 import type { TooltipItem } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
-import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { TranslationKey } from '../lib/i18n'
@@ -33,6 +33,15 @@ const PIE_COLORS = [
 ]
 // 转账独立的配色（3 类：转账 / 还款 / 存款 + 兜底未分类），蓝色家族
 const TRANSFER_COLORS = ['#1e88e5', '#5e35b1', '#00897b', '#90a4ae']
+
+// 选中柱加深一档（对任意 PIE_COLORS 生效）——对应 daily tab 里 RED→#b71c1c 的既有反馈模式
+function darkenHex(hex: string, factor = 0.3): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = Math.round(((n >> 16) & 0xff) * (1 - factor))
+  const g = Math.round(((n >> 8) & 0xff) * (1 - factor))
+  const b = Math.round((n & 0xff) * (1 - factor))
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
 
 type Tab = 'overview' | 'daily' | 'category' | 'extra' | 'transfer'
 
@@ -111,6 +120,7 @@ export default function Charts() {
     if (m > 12) { m = 1;  y++ }
     if (m < 1)  { m = 12; y-- }
     setMonth(m); setYear(y)
+    setExpandedCatDay(null)
   }
 
   const monthYearLabel = new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : 'en-US', {
@@ -225,6 +235,8 @@ export default function Charts() {
   const [catType, setCatType]           = useState<'expense' | 'income'>('expense')
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null)
   const [hiddenCatIds, setHiddenCatIds] = useState<Set<string>>(new Set())
+  // 钻取页里展开的"某一天"（该类目当天逐笔明细）；同时只展开一天
+  const [expandedCatDay, setExpandedCatDay] = useState<number | null>(null)
 
   const catData = useMemo(() => {
     const map: Record<string, { id: string; name: string; icon: string; total: number }> = {}
@@ -246,15 +258,36 @@ export default function Charts() {
   const catDailyData = useMemo(() => {
     if (!selectedCatId) return []
     const days = new Date(year, month, 0).getDate()
-    const arr = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0 }))
+    const arr = Array.from({ length: days }, (_, i) => ({ day: i + 1, amount: 0, count: 0 }))
     for (const tx of monthlyTxs) {
       if (tx.type !== catType || tx.category_id !== selectedCatId) continue
       const d = parseInt(tx.date.slice(8, 10))
       arr[d - 1].amount += cvtTx(tx.amount, tx.currency, tx.exchange_rate)
+      arr[d - 1].count += 1
     }
     return arr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyTxs, selectedCatId, catType])
+
+  // 钻取页当月总笔数（头部卡片"每日明细 · N笔"）
+  const selectedCatTxCount = useMemo(() => {
+    if (!selectedCatId) return 0
+    return monthlyTxs.filter(tx => tx.type === catType && tx.category_id === selectedCatId).length
+  }, [monthlyTxs, selectedCatId, catType])
+
+  // 展开的那一天的逐笔明细（金额降序，与每日支出 tab 的单日面板一致）
+  const catDayTxs = useMemo(() => {
+    if (!selectedCatId || expandedCatDay === null) return []
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(expandedCatDay).padStart(2, '0')}`
+    return monthlyTxs
+      .filter(tx => tx.type === catType && tx.category_id === selectedCatId && tx.date === dateStr)
+      .sort((a, b) => {
+        const va = cvtTx(a.amount, a.currency, a.exchange_rate)
+        const vb = cvtTx(b.amount, b.currency, b.exchange_rate)
+        return vb - va
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlyTxs, selectedCatId, expandedCatDay, catType, year, month])
 
   // ── Tab 4: Extra ──────────────────────────────────────────────────────
   // 上月（用来环比）：从 allTxs 现取
@@ -511,7 +544,10 @@ export default function Charts() {
     datasets: [{
       label: `${selectedCatEntry.icon} ${selectedCatEntry.name}`,
       data: catDailyData.map(d => d.amount),
-      backgroundColor: PIE_COLORS[selectedCatIdx % PIE_COLORS.length],
+      // 展开中的那天加深一档，与 daily tab 选中柱的反馈模式一致
+      backgroundColor: catDailyData.map(d => d.day === expandedCatDay
+        ? darkenHex(PIE_COLORS[selectedCatIdx % PIE_COLORS.length])
+        : PIE_COLORS[selectedCatIdx % PIE_COLORS.length]),
       borderRadius: 3,
       barPercentage: 0.8,
     }],
@@ -805,7 +841,7 @@ export default function Charts() {
             <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
               {(['expense', 'income'] as const).map(txType => (
                 <button key={txType}
-                  onClick={() => { setCatType(txType); setSelectedCatId(null); setHiddenCatIds(new Set()) }}
+                  onClick={() => { setCatType(txType); setSelectedCatId(null); setHiddenCatIds(new Set()); setExpandedCatDay(null) }}
                   className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                     catType === txType
                       ? txType === 'expense' ? 'bg-[#e53935] text-white shadow-sm' : 'bg-green-500 text-white shadow-sm'
@@ -824,7 +860,7 @@ export default function Charts() {
             ) : selectedCatEntry ? (
               /* ── Category daily breakdown ── */
               <>
-                <button onClick={() => setSelectedCatId(null)}
+                <button onClick={() => { setSelectedCatId(null); setExpandedCatDay(null) }}
                   className="flex items-center gap-1 text-sm text-gray-400 mb-3 -mt-1 active:text-gray-600">
                   <ChevronLeft size={15} />
                   <span>{t('tabCategory')}</span>
@@ -837,7 +873,7 @@ export default function Charts() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-800 truncate">{selectedCatEntry.name}</p>
-                    <p className="text-xs text-gray-400">{t('catDailyDetail')}</p>
+                    <p className="text-xs text-gray-400">{`${t('catDailyDetail')} · ${t('catTxCount', { n: selectedCatTxCount })}`}</p>
                   </div>
                   <p className="text-sm font-semibold shrink-0"
                     style={{ color: PIE_COLORS[selectedCatIdx % PIE_COLORS.length] }}>
@@ -856,29 +892,90 @@ export default function Charts() {
                       <Bar
                         key={`${lang}-${selectedCatEntry.id}`}
                         data={catDailyChartData!}
-                        options={{ ...barBase, plugins: { ...barBase.plugins, legend: { display: false } } }}
+                        options={{
+                          ...barBase,
+                          plugins: { ...barBase.plugins, legend: { display: false } },
+                          onClick: (_evt, elements) => {
+                            if (elements.length > 0) {
+                              const day = catDailyData[elements[0].index].day
+                              setExpandedCatDay(prev => prev === day ? null : day)
+                              // 图表和展开行之间可能隔着长列表，滚过去让反馈可见
+                              requestAnimationFrame(() => {
+                                document.getElementById(`cat-day-row-${day}`)
+                                  ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+                              })
+                            }
+                          },
+                        }}
                       />
                     </div>
+                    {/* 每日汇总行：点行展开当天该类目的逐笔明细 */}
                     <div className="space-y-1.5 pt-3 border-t border-gray-50">
                       {(() => {
                         const maxAmt = Math.max(...catDailyData.map(d => d.amount), 0.001)
-                        return catDailyData.filter(d => d.amount > 0).map(d => (
-                          <div key={d.day} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-7 shrink-0 text-right">
-                              {lang === 'zh' ? `${d.day}日` : `${d.day}`}
-                            </span>
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${(d.amount / maxAmt) * 100}%`,
-                                  background: PIE_COLORS[selectedCatIdx % PIE_COLORS.length],
-                                }} />
+                        const catColor = PIE_COLORS[selectedCatIdx % PIE_COLORS.length]
+                        return catDailyData.filter(d => d.amount > 0).map(d => {
+                          const isExpanded = expandedCatDay === d.day
+                          return (
+                            <div key={d.day} id={`cat-day-row-${d.day}`}>
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={isExpanded}
+                                onClick={() => setExpandedCatDay(prev => prev === d.day ? null : d.day)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    setExpandedCatDay(prev => prev === d.day ? null : d.day)
+                                  }
+                                }}
+                                className="flex items-center gap-2 py-0.5 cursor-pointer select-none active:opacity-70"
+                              >
+                                <span className="text-xs text-gray-400 w-7 shrink-0 text-right">
+                                  {lang === 'zh' ? `${d.day}日` : `${d.day}`}
+                                </span>
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full transition-all"
+                                    style={{
+                                      width: `${(d.amount / maxAmt) * 100}%`,
+                                      background: catColor,
+                                    }} />
+                                </div>
+                                <span className="text-sm font-medium text-gray-700 w-24 text-right shrink-0">
+                                  {symbol} {fmt(d.amount)}
+                                </span>
+                                <ChevronDown size={14}
+                                  className={`shrink-0 text-gray-300 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </div>
+
+                              {isExpanded && catDayTxs.length > 0 && (
+                                <div className="border border-gray-100 rounded-xl p-3 my-1.5 bg-gray-50">
+                                  <div className="space-y-2">
+                                    {catDayTxs.map(tx => (
+                                      <div key={tx.id} className="flex items-center gap-2">
+                                        <span className="text-lg shrink-0">{tx.categories?.icon ?? '📦'}</span>
+                                        <p className="flex-1 min-w-0 text-sm text-gray-700 truncate">
+                                          {tx.description || (tx.categories?.name ?? t('uncategorized'))}
+                                        </p>
+                                        <span className={`text-sm font-semibold shrink-0 ${catType === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
+                                          {catType === 'expense' ? '-' : '+'}{symbol} {fmt(cvtTx(tx.amount, tx.currency, tx.exchange_rate))}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex justify-between pt-2 mt-1 border-t border-gray-200">
+                                    <span className="text-xs text-gray-400">
+                                      {`${lang === 'zh' ? '当日合计' : 'Day total'} · ${t('catTxCount', { n: catDayTxs.length })}`}
+                                    </span>
+                                    <span className={`text-sm font-semibold ${catType === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
+                                      {symbol} {fmt(d.amount)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <span className="text-sm font-medium text-gray-700 w-24 text-right shrink-0">
-                              {symbol} {fmt(d.amount)}
-                            </span>
-                          </div>
-                        ))
+                          )
+                        })
                       })()}
                     </div>
                   </>
@@ -925,7 +1022,7 @@ export default function Charts() {
                           {symbol} {fmt(d.total)}
                         </span>
                         <button
-                          onClick={e => { e.stopPropagation(); setSelectedCatId(d.id) }}
+                          onClick={e => { e.stopPropagation(); setSelectedCatId(d.id); setExpandedCatDay(null) }}
                           className="shrink-0 -mr-1 text-gray-300 active:text-gray-500 transition-colors"
                           aria-label={t('catDailyDetail')}>
                           <ChevronRight size={14} />

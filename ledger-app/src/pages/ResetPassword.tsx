@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PasswordInput from '../components/PasswordInput'
+import { PageShell } from '../components/layout/StatusBand'
 
 export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState('')
@@ -48,7 +49,8 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="anim-page h-app max-w-md mx-auto overflow-y-auto bg-gray-50 flex flex-col justify-center px-4 pt-safe-4 pb-safe-6">
+    <PageShell>
+    <div className="anim-page h-full overflow-y-auto flex flex-col justify-center px-4 pt-safe-4 pb-safe-6">
       <div className="bg-white rounded-2xl p-5">
         <div className="mb-5">
           <h1 className="text-xl font-bold text-gray-900">{t('resetPasswordTitle')}</h1>
@@ -121,5 +123,6 @@ export default function ResetPassword() {
         </form>
       </div>
     </div>
+    </PageShell>
   )
 }

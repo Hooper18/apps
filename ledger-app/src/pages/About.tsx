@@ -2,13 +2,15 @@ import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { Lang } from '../lib/i18n'
+import { PageShell } from '../components/layout/StatusBand'
 
 export default function About() {
   const navigate = useNavigate()
   const { lang, setLang, t } = useLanguage()
 
   return (
-    <div className="anim-page h-app max-w-md mx-auto bg-gray-50 flex flex-col overflow-hidden">
+    <PageShell>
+    <div className="anim-page h-full flex flex-col overflow-hidden">
       <div className="shrink-0 flex items-center justify-between px-2 pt-safe-2">
         <button
           onClick={() => navigate(-1)}
@@ -32,6 +34,7 @@ export default function About() {
         </div>
       </div>
     </div>
+    </PageShell>
   )
 }
 

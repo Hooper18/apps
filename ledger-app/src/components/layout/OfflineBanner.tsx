@@ -57,14 +57,11 @@ export default function OfflineBanner({
   if (online && pendingCount === 0) return null
 
   return (
-    // data-offline-banner：index.css 里靠它把后面 main 的 --sat 置 0 ——
-    // 横幅自己已经垫过状态栏 / 灵动岛，页面头部不用再垫一次。
+    // 顶部安全区不归横幅管：Layout 在横幅出现时一定会先放一条状态栏底（StatusBand）。
     <div
       role="status"
       aria-live="polite"
-      data-offline-banner
-      style={{ paddingTop: 'calc(var(--sat) + 6px)' }}
-      className="shrink-0 px-4 pb-1.5 flex items-center gap-2 text-xs text-gray-600 bg-gray-100 border-b border-gray-200"
+      className="shrink-0 px-5 py-2 flex items-center gap-2 text-xs text-gray-600 bg-gray-100 border-b border-gray-200"
     >
       {!online && (
         <>

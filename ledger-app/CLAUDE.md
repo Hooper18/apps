@@ -126,7 +126,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 ### 外壳高度
 - 一律用 `h-app`（= `var(--app-h)`），**不要再写 `h-dvh` / `h-screen` / `min-h-screen`**。
 - 原因：iPhone 把站点加到主屏幕后，`viewport-fit=cover` 下 `100%` / `dvh` / `svh` 会比屏幕矮一截安全区（WebKit bug 254868），底部露出一条 body 背景。`index.css` 里 standalone 用 `100vh`，`src/lib/viewport.ts` 在 iPhone standalone 下再用 `screen.height` 写死像素兜底。
-- 不走 Layout 的页面（Auth / ResetPassword / About）自己写 `h-app overflow-y-auto`（html/body 是 `overflow:hidden`，页面得自己能滚）。
+- 不走 Layout 的页面（Auth / ResetPassword / About）用 `PageShell` 包住，里面自己写 `h-full overflow-y-auto`（html/body 是 `overflow:hidden`，页面得自己能滚）。
 
 ### 安全区
 - 用 `index.css` 里的变量 `--sat` / `--sab` 和工具类，**不要直接写 `env(safe-area-inset-*)`**：
@@ -134,7 +134,14 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
   - 底部：`pb-safe-2/4/6`（有 Home 指示条就让出指示条，没有就用最小值）
   - 有标签栏的页面，滚动区底部用 `pb-page`（Layout 上的 `has-tabbar` 会让它自动多让出标签栏高度）
 - 这些类自带 padding，别和同方向的 `pt-*` / `pb-*` 写在同一个元素上。旧的 `.safe-top` 就是因为写在 `@layer base`、被同元素的 `pt-4` 盖掉，一直没生效。
-- 离线横幅（`data-offline-banner`）出现时会把后面 `main` 里的 `--sat` 置 0，横幅自己垫状态栏。
+- 目标机型：用户的 iPhone 17 Pro Max（440×956pt，竖屏安全区顶 62 / 底 34）。本地预览时把视口设成 440×956，再手动 `--sat: 62px`、`--sab: 34px` 模拟。
+
+### 状态栏底（`components/layout/StatusBand.tsx`）
+- `black-translucent` 模式下状态栏文字的颜色不归页面管：用户手机上同一天出现过白字和黑字，浅色页面配白字时完全看不见。
+- 所以**除首页外所有页面**顶部都有一条高度 = 顶部安全区的品牌红色带子（`.status-band`），页面内容是接在下面的圆角面板（`rounded-t-band`，外层 `bg-band`）。品牌红对白字 4.2:1、对黑字 5.0:1，两种都读得出来；**不要改成黑色或白色**。
+- 首页是 `<Layout immersive>`：照片自己铺到状态栏后面，不放带子（离线横幅出现时例外，Layout 会自动补上）。
+- 带子后面的元素里 `--sat` 被置 0，所以页面头部照常写 `pt-safe-*` 即可，不会让两次。
+- 不走 Layout 的页面用 `PageShell` 包一层（Auth / ResetPassword / About 已经这样做）。
 - 弹层向上定位别用 `window.innerHeight` 算 `bottom`（主屏幕模式下它偏小），用 `top` + `translateY(-100%)`。
 
 ### 底部导航

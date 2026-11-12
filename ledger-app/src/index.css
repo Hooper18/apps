@@ -4,10 +4,17 @@
 
 @layer base {
   :root {
-    /* 安全区。页面一律用这两个变量，不直接写 env()：离线横幅出现时会把
-       main 里的 --sat 置 0（横幅自己已经让出了状态栏），避免顶部留两次白。 */
+    /* 安全区。页面一律用这两个变量，不直接写 env()：状态栏底（StatusBand）
+       出现时会把它后面内容里的 --sat 置 0（它已经让出了状态栏），避免顶部留两次白。 */
     --sat: env(safe-area-inset-top, 0px);
     --sab: env(safe-area-inset-bottom, 0px);
+
+    /* 状态栏底的高度：永远等于真实的顶部安全区。单独一个变量，是因为
+       它后面的元素会把 --sat 置 0，而圆角还需要知道"原本有没有安全区"。 */
+    --status-band: var(--sat);
+    /* 状态栏底的颜色 = 品牌红。特意选中间亮度：对白字 4.2:1、对黑字 5.0:1，
+       系统把状态栏文字画成白色还是黑色都读得出来（原因见 StatusBand.tsx）。 */
+    --status-band-color: #e53935;
 
     /* App 外壳高度。iOS 主屏幕 web app 在 viewport-fit=cover 下，100% / dvh / svh
        会比屏幕矮一截安全区（WebKit bug 254868），底部露出一条 body 背景；
@@ -58,8 +65,19 @@
     touch-action: manipulation;
   }
 
-  /* 离线横幅在时，它已经垫过状态栏了，后面的页面不再重复垫。 */
-  [data-offline-banner] ~ main {
+  /* 状态栏底：iOS 主屏幕模式下状态栏文字的颜色不归页面管，浅色页面顶部要垫一条
+     黑字白字都读得出来的颜色（见 components/layout/StatusBand.tsx）。
+     没有安全区的设备上高度为 0，等于不存在。 */
+  .status-band {
+    height: var(--status-band);
+    background: var(--status-band-color);
+  }
+  /* 圆角面板两个上角后面露出来的底色，要和状态栏底同色。 */
+  .bg-band {
+    background: var(--status-band-color);
+  }
+  /* 状态栏底已经让出了状态栏，后面的内容不再重复让。 */
+  .status-band ~ * {
     --sat: 0px;
   }
 
@@ -88,6 +106,12 @@
 
   /* —— 外壳与安全区 ——
      这些类自带 padding，别和同方向的 pt-* / pb-* 写在同一个元素上。 */
+  /* 接在状态栏底下面的内容面板：上面两个角做圆。没有安全区（没有状态栏底）时半径为 0。 */
+  .rounded-t-band {
+    border-top-left-radius: min(28px, var(--status-band));
+    border-top-right-radius: min(28px, var(--status-band));
+  }
+
   .h-app     { height: var(--app-h); }
   .min-h-app { min-height: var(--app-h); }
 

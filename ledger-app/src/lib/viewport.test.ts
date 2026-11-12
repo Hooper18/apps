@@ -14,6 +14,11 @@ describe('computeAppHeight', () => {
     expect(computeAppHeight(iphone)).toBe(852)
   })
 
+  it('covers the whole 440×956 screen of an iPhone 17 Pro Max', () => {
+    expect(computeAppHeight({ ...iphone, screenWidth: 440, screenHeight: 956 })).toBe(956)
+    expect(computeAppHeight({ ...iphone, screenWidth: 440, screenHeight: 956, portrait: false })).toBe(440)
+  })
+
   it('uses the short edge in landscape (iOS never swaps screen.width/height)', () => {
     expect(computeAppHeight({ ...iphone, portrait: false })).toBe(393)
   })

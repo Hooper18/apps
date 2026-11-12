@@ -68,7 +68,7 @@ function AppRoutes() {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout>
+              <Layout immersive>
                 <Home />
               </Layout>
             </ProtectedRoute>

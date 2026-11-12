@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import type { Lang } from '../lib/i18n'
 import PasswordInput from '../components/PasswordInput'
 import Segmented from '../components/Segmented'
+import { PageShell } from '../components/layout/StatusBand'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -97,8 +98,9 @@ export default function Auth() {
   const agreementParts = agreement.split(linkText)
 
   return (
-    // h-app + overflow-y-auto：html/body 是 overflow:hidden，页面自己得能滚（小屏 + 键盘弹出时）
-    <div className="anim-page h-app max-w-md mx-auto overflow-y-auto bg-gray-50 flex flex-col">
+    <PageShell>
+    {/* html/body 是 overflow:hidden，页面自己得能滚（小屏 + 键盘弹出时） */}
+    <div className="anim-page h-full overflow-y-auto flex flex-col">
       {/* Header */}
       <div className="shrink-0 px-2 pt-safe-2 flex justify-end">
         <button
@@ -290,5 +292,6 @@ export default function Auth() {
         </p>
       </div>
     </div>
+    </PageShell>
   )
 }

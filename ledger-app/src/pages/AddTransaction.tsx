@@ -273,12 +273,15 @@ export default function AddTransaction() {
         </div>
       )}
 
-      {/* Content area — fixed height, no outer scroll */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      {/* Content area — no outer scroll */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
-        {/* Category grid — fixed height, inner scroll */}
-        <div className="relative shrink-0">
-          <div className="grid grid-cols-5 gap-1 px-3 pt-1 pb-3 max-h-48 tall:max-h-64 overflow-y-auto no-scrollbar">
+        {/* Category grid — 吃掉头部和键盘之间所有剩余高度、内部滚动。
+            以前是写死的 max-h：矮屏上会把下面的日期行挤出去，高屏（iPhone Pro Max
+            956pt）上又在中间空出一大块。现在类目区自适应，备注 / 日期 / 金额 / 键盘
+            始终贴在屏幕下半部，拇指够得着。 */}
+        <div className="relative flex-1 min-h-[84px]">
+          <div className="grid grid-cols-5 content-start gap-1 px-3 pt-1 pb-3 h-full overflow-y-auto no-scrollbar">
           {categories.map(cat => (
             <button key={cat.id} onClick={() => setSelected(cat.id)}
               aria-pressed={selectedCategory === cat.id}
@@ -303,7 +306,7 @@ export default function AddTransaction() {
         </div>
 
         {/* Note */}
-        <div className="px-4 mb-2">
+        <div className="shrink-0 px-4 mb-2">
           <input type="text" value={note} onChange={e => setNote(e.target.value)}
             placeholder={t('notePlaceholder')} maxLength={50}
             className="w-full px-4 h-11 bg-gray-50 border border-transparent rounded-xl text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-primary/40 transition-colors"
@@ -356,8 +359,9 @@ export default function AddTransaction() {
 
         {/* Amount display */}
         <div className="flex items-baseline gap-1.5 px-2 pb-2">
-          <span className="font-num text-lg text-gray-400">{symbol}</span>
-          <span className="font-num text-3xl font-bold text-gray-900 tracking-tight flex-1 truncate">{amount}</span>
+          <span className="font-num text-lg tall:text-xl text-gray-400">{symbol}</span>
+          {/* text-3xl 这个类名测试在用，别删；高屏上再放大一档 */}
+          <span className="font-num text-3xl tall:text-[40px] tall:leading-[44px] font-bold text-gray-900 tracking-tight flex-1 truncate">{amount}</span>
         </div>
 
         {/* Numpad */}

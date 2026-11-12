@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { Lang } from '../lib/i18n'
@@ -8,30 +8,26 @@ export default function About() {
   const { lang, setLang, t } = useLanguage()
 
   return (
-    <div className="anim-page h-dvh bg-gray-50 flex flex-col overflow-hidden">
-      <div className="bg-primary text-white px-6 pt-10 pb-10 text-center relative overflow-hidden flex-shrink-0">
-        <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10" />
-        <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/10" />
+    <div className="anim-page h-app max-w-md mx-auto bg-gray-50 flex flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between px-2 pt-safe-2">
         <button
           onClick={() => navigate(-1)}
           aria-label={t('backAriaLabel')}
-          className="absolute top-4 left-4 text-white/80 px-2 py-1 rounded hover:bg-white/10 transition-colors"
+          className="w-11 h-11 flex items-center justify-center rounded-full active:bg-gray-200 transition-colors"
         >
-          <ArrowLeft size={20} />
+          <ChevronLeft size={26} className="text-gray-900" />
         </button>
         <button
           onClick={() => setLang((lang === 'zh' ? 'en' : 'zh') as Lang)}
-          className="absolute top-4 right-4 text-white/80 text-sm font-medium px-2 py-1 rounded hover:bg-white/10 transition-colors"
+          className="h-11 px-3 text-base font-medium text-primary active:opacity-60"
         >
           {lang === 'zh' ? 'EN' : '中'}
         </button>
-        <div className="relative">
-          <h1 className="text-3xl font-bold tracking-wide">{t('aboutPageTitle')}</h1>
-        </div>
       </div>
+      <h1 className="shrink-0 px-5 pt-1 pb-3 text-[28px] leading-[34px] font-bold text-gray-900">{t('aboutPageTitle')}</h1>
 
-      <div className="flex-1 min-h-0 px-5 -mt-5 pb-5 relative">
-        <div className="bg-white rounded-2xl shadow-lg h-full overflow-y-auto no-scrollbar p-6">
+      <div className="flex-1 min-h-0 px-4 pb-safe-4">
+        <div className="bg-white rounded-2xl h-full overflow-y-auto no-scrollbar p-5">
           {lang === 'zh' ? <ZhContent /> : <EnContent />}
         </div>
       </div>
@@ -41,7 +37,7 @@ export default function About() {
 
 function ZhContent() {
   return (
-    <div className="space-y-4 text-sm text-gray-700">
+    <div className="space-y-4 text-sm leading-[1.75] text-gray-700">
       <p>口袋记账是一个个人开发的记账工具，最初是我作为留学生为自己做的——在马来西亚生活、偶尔回国、计划去其他国家，多种货币混在一起记账很麻烦，市面上的记账 app 对跨币种支持都不够好，所以自己动手写了一个。</p>
 
       <div>
@@ -73,7 +69,7 @@ function ZhContent() {
 
 function EnContent() {
   return (
-    <div className="space-y-4 text-sm text-gray-700">
+    <div className="space-y-4 text-sm leading-[1.75] text-gray-700">
       <p>Pocket Ledger is a personal project I built for myself as an international student. Living in Malaysia, occasionally going home, and planning trips elsewhere meant dealing with several currencies at once — and I couldn't find an existing app that handled cross-currency tracking well. So I wrote my own.</p>
 
       <div>

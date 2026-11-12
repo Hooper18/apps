@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { Lang } from '../lib/i18n'
 import PasswordInput from '../components/PasswordInput'
+import Segmented from '../components/Segmented'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -89,43 +90,43 @@ export default function Auth() {
     setLoading(false)
   }
 
-  const inputClass = 'w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all'
+  const inputClass = 'w-full px-4 h-12 rounded-xl border border-transparent bg-gray-50 focus:outline-none focus:border-primary/40 text-base text-gray-900 placeholder:text-gray-400 transition-colors'
 
   const agreement = t('loginAgreement')
   const linkText = t('loginAgreementLinkText')
   const agreementParts = agreement.split(linkText)
 
   return (
-    <div className="anim-page min-h-screen bg-gray-50 flex flex-col">
+    // h-app + overflow-y-auto：html/body 是 overflow:hidden，页面自己得能滚（小屏 + 键盘弹出时）
+    <div className="anim-page h-app max-w-md mx-auto overflow-y-auto bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="bg-primary text-white px-6 pt-10 pb-10 text-center relative overflow-hidden">
-        <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10" />
-        <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/10" />
+      <div className="shrink-0 px-2 pt-safe-2 flex justify-end">
         <button
           onClick={() => setLang((lang === 'zh' ? 'en' : 'zh') as Lang)}
-          className="absolute top-4 right-4 text-white/80 text-sm font-medium px-2 py-1 rounded hover:bg-white/10 transition-colors"
+          className="h-11 px-3 text-base font-medium text-primary active:opacity-60"
         >
           {lang === 'zh' ? 'EN' : '中'}
         </button>
-        <div className="relative">
-          <h1 className="text-3xl font-bold tracking-wide">{t('appName')}</h1>
-        </div>
+      </div>
+      <div className="shrink-0 px-6 pt-6 pb-8 text-center">
+        <img src="/icons/pwa-192.png" alt="" className="w-[76px] h-[76px] rounded-[18px] mx-auto mb-4" />
+        <h1 className="text-[28px] leading-[34px] font-bold text-gray-900">{t('appName')}</h1>
       </div>
 
       {/* Card */}
-      <div className="flex-1 px-5 -mt-5 relative">
-        <div className="bg-white rounded-2xl shadow-lg p-6">
+      <div className="flex-1 px-4 pb-safe-6">
+        <div className="bg-white rounded-2xl p-5">
 
           {mode === 'forgot' ? (
             /* ── Forgot password view ── */
             <form onSubmit={handleForgot} className="space-y-4">
               <div className="mb-2">
-                <h2 className="text-base font-semibold text-gray-800">{t('forgotPasswordTitle')}</h2>
-                <p className="text-sm text-gray-400 mt-1">{t('forgotPasswordDesc')}</p>
+                <h2 className="text-lg font-semibold text-gray-900">{t('forgotPasswordTitle')}</h2>
+                <p className="text-sm text-gray-500 mt-1">{t('forgotPasswordDesc')}</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('emailLabel')}</label>
+                <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('emailLabel')}</label>
                 <input
                   type="email"
                   value={email}
@@ -153,7 +154,7 @@ export default function Auth() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary text-white py-3.5 rounded-xl font-semibold text-sm tracking-wide active:scale-[0.98] disabled:opacity-60 transition-all duration-150 mt-1"
+                  className="w-full bg-primary text-white h-[50px] rounded-xl font-semibold text-base active:bg-primary-dark disabled:opacity-60 transition-colors mt-1"
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -164,11 +165,11 @@ export default function Auth() {
                 </button>
               )}
 
-              <p className="text-center text-xs text-gray-400 mt-2">
+              <p className="text-center text-sm text-gray-500 mt-2">
                 <button
                   type="button"
                   onClick={() => switchMode('login')}
-                  className="text-primary font-medium"
+                  className="text-primary font-medium py-2 px-2 active:opacity-60"
                 >
                   {t('forgotBackToLogin')}
                 </button>
@@ -177,25 +178,19 @@ export default function Auth() {
           ) : (
             /* ── Login / Register view ── */
             <>
-              <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
-                {(['login', 'register'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => switchMode(m)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      mode === m
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    {m === 'login' ? t('loginTab') : t('registerTab')}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                className="mb-5"
+                options={[
+                  { value: 'login' as const, label: t('loginTab') },
+                  { value: 'register' as const, label: t('registerTab') },
+                ]}
+                value={mode}
+                onChange={switchMode}
+              />
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('emailLabel')}</label>
+                  <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('emailLabel')}</label>
                   <input
                     type="email"
                     value={email}
@@ -208,7 +203,7 @@ export default function Auth() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('passwordLabel')}</label>
+                  <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('passwordLabel')}</label>
                   <PasswordInput
                     value={password}
                     onChange={setPassword}
@@ -221,7 +216,7 @@ export default function Auth() {
                       <button
                         type="button"
                         onClick={() => switchMode('forgot')}
-                        className="text-xs text-primary/70 hover:text-primary transition-colors"
+                        className="text-[13px] leading-[18px] py-1.5 text-primary active:opacity-60"
                       >
                         {t('forgotPasswordLink')}
                       </button>
@@ -231,7 +226,7 @@ export default function Auth() {
 
                 {mode === 'register' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('confirmPasswordLabel')}</label>
+                    <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('confirmPasswordLabel')}</label>
                     <PasswordInput
                       value={confirmPassword}
                       onChange={setConfirmPassword}
@@ -259,7 +254,7 @@ export default function Auth() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary text-white py-3.5 rounded-xl font-semibold text-sm tracking-wide active:scale-[0.98] disabled:opacity-60 transition-all duration-150 mt-1"
+                  className="w-full bg-primary text-white h-[50px] rounded-xl font-semibold text-base active:bg-primary-dark disabled:opacity-60 transition-colors mt-1"
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -271,9 +266,9 @@ export default function Auth() {
               </form>
 
               {mode === 'login' && (
-                <p className="text-center text-xs text-gray-400 mt-4">
+                <p className="text-center text-sm text-gray-500 mt-3">
                   {t('noAccount')}
-                  <button onClick={() => switchMode('register')} className="text-primary font-medium ml-1">
+                  <button onClick={() => switchMode('register')} className="text-primary font-medium ml-1 py-2 active:opacity-60">
                     {t('registerNow')}
                   </button>
                 </p>
@@ -282,7 +277,7 @@ export default function Auth() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6 px-4">
+        <p className="text-center text-xs leading-[18px] text-gray-400 mt-5 px-6">
           {agreementParts.length === 2 ? (
             <>
               {agreementParts[0]}

@@ -1,6 +1,6 @@
 # 口袋记账（ledger-app）
 
-> 最后校准：2026-05-30，以代码为准重写。
+> 最后校准：2026-05-30，以代码为准重写；2026-11-12 补「界面与安全区」一节。
 
 ## 项目概述
 React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `finance-app.html` 离线原型（已不维护，保留参考）。
@@ -119,6 +119,42 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - `database.types.ts` 是**手写**，未用 `supabase gen types`；改 schema 需手动同步。
 - categories / budgets 无 `updated_at` 列。
 
+## 界面与安全区（2026-11-12 按 Apple HIG 翻新）
+
+进展和决策过程见 `进展日志.md`。这里只记写代码时要遵守的约定。
+
+### 外壳高度
+- 一律用 `h-app`（= `var(--app-h)`），**不要再写 `h-dvh` / `h-screen` / `min-h-screen`**。
+- 原因：iPhone 把站点加到主屏幕后，`viewport-fit=cover` 下 `100%` / `dvh` / `svh` 会比屏幕矮一截安全区（WebKit bug 254868），底部露出一条 body 背景。`index.css` 里 standalone 用 `100vh`，`src/lib/viewport.ts` 在 iPhone standalone 下再用 `screen.height` 写死像素兜底。
+- 不走 Layout 的页面（Auth / ResetPassword / About）自己写 `h-app overflow-y-auto`（html/body 是 `overflow:hidden`，页面得自己能滚）。
+
+### 安全区
+- 用 `index.css` 里的变量 `--sat` / `--sab` 和工具类，**不要直接写 `env(safe-area-inset-*)`**：
+  - 顶部：`pt-safe`、`pt-safe-2/3/4`（安全区 + 8/12/16px）
+  - 底部：`pb-safe-2/4/6`（有 Home 指示条就让出指示条，没有就用最小值）
+  - 有标签栏的页面，滚动区底部用 `pb-page`（Layout 上的 `has-tabbar` 会让它自动多让出标签栏高度）
+- 这些类自带 padding，别和同方向的 `pt-*` / `pb-*` 写在同一个元素上。旧的 `.safe-top` 就是因为写在 `@layer base`、被同元素的 `pt-4` 盖掉，一直没生效。
+- 离线横幅（`data-offline-banner`）出现时会把后面 `main` 里的 `--sat` 置 0，横幅自己垫状态栏。
+- 弹层向上定位别用 `window.innerHeight` 算 `bottom`（主屏幕模式下它偏小），用 `top` + `translateY(-100%)`。
+
+### 底部导航
+- `BottomNav` 是浮在内容上方的玻璃胶囊（absolute 定位在 Layout 里），只放 4 个导航项；「记一笔」是胶囊右边独立的圆按钮（HIG：标签栏只做导航、不放操作）。
+- 页面内容铺到屏幕底，从标签栏下面滑过去；新页面的滚动容器记得加 `pb-page`。
+
+### 设计变量（`tailwind.config.js`）
+- 灰阶 = iOS 系统灰：`gray-50` 页面底色 / 填充，`gray-100` 分隔线，`gray-300` 箭头，`gray-400` 起才能当文字（对比度 ≥ 4.5:1），`gray-900` 正文。
+- 字号映射到 HIG 文本样式：`text-xs` 12、`text-sm` 15、`text-base` 17、`text-lg` 20、`text-xl` 22；页面大标题 `text-[28px] leading-[34px] font-bold`；最小 11px。输入框一律 `text-base`。
+- 强调色只有 `primary`（红）：选中态、主按钮、可点文字。**流水里的支出金额用正文色**，收入绿（`green-600`）、转账蓝（`blue-600`）；红色文字只用于超支 / 删除这类警示（`red-600`）。统计页图表配色不受此约束。
+- 金额数字加 `font-num`（SF Pro Rounded + 等宽数字）。
+- 卡片不用阴影，靠 `gray-50` 底 + 白卡片分层；`shadow-glass` 只给浮动的导航层和下拉菜单。
+- 分段切换用 `components/Segmented.tsx`，不要再写下划线 tab。
+- 可点元素点击区域至少 44×44：视觉上要小的控件加 `hit-44`（行内小按钮用 `hit-row`）撑大点击范围。
+
+### 测试依赖的细节（改样式时别碰）
+- 记账页金额 span 必须带 `text-3xl` 类名（`AddTransaction.test.tsx` 靠它找）。
+- Segmented 每一段是普通 `<button>`、文字直接放在 button 里（测试按 `getByRole('button', { name })` / `getByText` 定位）。
+- 弹层关闭按钮的 aria-label 用 `t('close')`，不要用 `t('cancel')`（和删除确认框的「取消」撞名）。
+
 ## 全局 Toast
 - `src/lib/toast.ts`：window event bus（`ledger:toast`），导出 `showToast(message, { durationMs? })` / `subscribeToast(cb)`。
 - `src/components/layout/ToastHost.tsx`：唯一渲染宿主，挂在 `App` 顶层 Provider 内。
@@ -168,10 +204,10 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - 货币定义统一收口到 `types/index.ts`，新增 MOP
 - PWA 图标：红底白字"记账"，含 192/512/maskable 三个 PNG
 - 全局滚动：html/body/#root 加 `height:100%; overflow:hidden`；Layout 用 `h-dvh`
-- BottomNav 从 `fixed` 改为正常流（`shrink-0`），Layout main 去掉 `pb-16`
+- BottomNav 从 `fixed` 改为正常流（`shrink-0`），Layout main 去掉 `pb-16`（**2026-11-12 起已作废**：现在是浮动标签栏，见上面「界面与安全区」）
 - 删除首页底部"+ 记一笔"文字按钮（保留导航栏 + 圆形按钮）
 - 记账页键盘高度压缩（py 缩窄共节省约 50px）
-- 各页 header `pt-12 → pt-4`（viewport 未设 viewport-fit=cover，safe-area-inset-top 为 0）
+- 各页 header `pt-12 → pt-4`（viewport 未设 viewport-fit=cover，safe-area-inset-top 为 0）（**2026-11-12 起已作废**：现在各页头部用 `pt-safe-*`）
 - PWA 状态栏：theme-color = `#ffffff`，viewport 加 `viewport-fit=cover`
 
 ## GitHub

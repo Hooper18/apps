@@ -130,29 +130,31 @@ export default function Calendar() {
     <div className="anim-page flex flex-col h-full bg-gray-50">
 
       {/* ── Header ── */}
-      <div className="bg-white px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
+      <div className="shrink-0 px-2.5 pt-safe-2 pb-1">
         <div className="flex items-center justify-between">
-          <button onClick={() => changeMonth(-1)}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200">
-            <ChevronLeft size={18} className="text-gray-600" />
+          <button onClick={() => changeMonth(-1)} aria-label={t('prevMonth')}
+            className="w-11 h-11 flex items-center justify-center group">
+            <span className="w-9 h-9 rounded-full bg-white group-active:bg-gray-200 flex items-center justify-center transition-colors">
+              <ChevronLeft size={20} className="text-gray-700" />
+            </span>
           </button>
-          <span className="text-base font-bold text-gray-800">{t('yearMonthFmt', { year, month })}</span>
-          <button onClick={() => changeMonth(1)} disabled={isCurrentMonth}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200 disabled:opacity-30">
-            <ChevronRight size={18} className="text-gray-600" />
+          <span className="text-base font-semibold text-gray-900">{t('yearMonthFmt', { year, month })}</span>
+          <button onClick={() => changeMonth(1)} disabled={isCurrentMonth} aria-label={t('nextMonth')}
+            className="w-11 h-11 flex items-center justify-center group disabled:opacity-30">
+            <span className="w-9 h-9 rounded-full bg-white group-active:bg-gray-200 flex items-center justify-center transition-colors">
+              <ChevronRight size={20} className="text-gray-700" />
+            </span>
           </button>
         </div>
       </div>
 
       {/* ── Calendar (always visible) ── */}
-      <div className="shrink-0 px-4 pt-4 pb-2">
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="shrink-0 px-4 pt-1 pb-2">
+        <div className="bg-white rounded-2xl overflow-hidden px-1.5 pb-1.5">
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 border-b border-gray-100">
+          <div className="grid grid-cols-7">
             {calHeaders.map((d, i) => (
-              <div key={i} className={`py-2 text-center text-xs font-medium ${
-                i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
-              }`}>
+              <div key={i} className="pt-3 pb-1.5 text-center text-xs font-medium text-gray-400">
                 {d}
               </div>
             ))}
@@ -166,35 +168,33 @@ export default function Calendar() {
           ) : (
             <div className="grid grid-cols-7">
               {calDays.map((day, idx) => {
-                if (!day) return <div key={`empty-${idx}`} className="aspect-square border-b border-r border-gray-50" />
+                if (!day) return <div key={`empty-${idx}`} className="aspect-square" />
 
                 const dateStr = `${year}-${pad2(month)}-${pad2(day)}`
                 const summary = byDate[dateStr]
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selectedDate
-                const dow = idx % 7
 
                 return (
                   <button key={dateStr}
                     onClick={() => setSelectedDate(dateStr)}
-                    className={`aspect-square flex flex-col items-center justify-start pt-1.5 px-0.5 border-b border-r border-gray-50 transition-colors ${
-                      isSelected ? 'bg-red-50' : 'active:bg-gray-50'
+                    aria-pressed={isSelected}
+                    className={`aspect-square flex flex-col items-center justify-start pt-1 px-0.5 rounded-xl transition-colors ${
+                      isSelected ? 'bg-primary/10' : 'active:bg-gray-50'
                     }`}
                   >
-                    <span className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
-                      isToday   ? 'bg-primary text-white' :
-                      dow === 0 ? 'text-red-400' :
-                      dow === 6 ? 'text-blue-400' : 'text-gray-700'
+                    <span className={`font-num text-sm w-7 h-7 flex items-center justify-center rounded-full ${
+                      isToday ? 'bg-primary text-white font-semibold' : 'text-gray-900'
                     }`}>
                       {day}
                     </span>
                     {summary && summary.expense > 0 && (
-                      <span className="text-[10px] text-red-400 font-medium leading-tight mt-0.5 w-full text-center truncate px-0.5">
+                      <span className="font-num text-[11px] text-gray-500 leading-tight w-full text-center truncate">
                         {fmt(summary.expense)}
                       </span>
                     )}
                     {summary && summary.income > 0 && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 mt-0.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-0.5 shrink-0" />
                     )}
                   </button>
                 )
@@ -205,16 +205,16 @@ export default function Calendar() {
 
         {/* Month summary */}
         {!loading && (
-          <div className="mt-2 bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="mt-3 bg-white rounded-2xl overflow-hidden">
             <div className="grid grid-cols-3 divide-x divide-gray-100">
               {[
-                { labelKey: 'expense' as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.expense, 0), color: 'text-red-500' },
-                { labelKey: 'income'  as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.income,   0), color: 'text-green-500' },
-                { labelKey: 'balance' as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.income - d.expense, 0), color: 'text-blue-500' },
+                { labelKey: 'expense' as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.expense, 0), color: 'text-gray-900' },
+                { labelKey: 'income'  as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.income,   0), color: 'text-green-600' },
+                { labelKey: 'balance' as TranslationKey, value: Object.values(byDate).reduce((s, d) => s + d.income - d.expense, 0), color: 'text-gray-900' },
               ].map(item => (
-                <div key={item.labelKey} className="flex flex-col items-center py-3">
-                  <span className="text-xs text-gray-400 mb-1">{t(item.labelKey)}</span>
-                  <span className={`text-sm font-bold ${item.color}`}>{symbol} {fmt(Math.abs(item.value))}</span>
+                <div key={item.labelKey} className="flex flex-col items-center py-3 px-1 min-w-0">
+                  <span className="text-xs text-gray-400 mb-0.5">{t(item.labelKey)}</span>
+                  <span className={`font-num text-sm font-semibold max-w-full truncate ${item.color}`}>{symbol} {fmt(Math.abs(item.value))}</span>
                 </div>
               ))}
             </div>
@@ -222,7 +222,7 @@ export default function Calendar() {
             {monthTransferTotal > 0 && (
               <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between">
                 <span className="text-xs text-gray-400">{t('transfer')}</span>
-                <span className="text-xs font-medium text-blue-500">{symbol} {fmt(monthTransferTotal)}</span>
+                <span className="font-num text-xs font-medium text-blue-600">{symbol} {fmt(monthTransferTotal)}</span>
               </div>
             )}
           </div>
@@ -230,13 +230,13 @@ export default function Calendar() {
       </div>
 
       {/* ── Day detail (scrollable, takes remaining height) ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-1 pb-page">
         {selectedDate && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="font-num text-base font-semibold text-gray-900">
                   {new Date(selectedDate + 'T00:00:00').getMonth() + 1}/{new Date(selectedDate + 'T00:00:00').getDate()}
                 </span>
                 <span className="text-xs text-gray-400">
@@ -245,13 +245,13 @@ export default function Calendar() {
               </div>
               <div className="flex gap-3 flex-wrap justify-end">
                 {selectedSummary && selectedSummary.expense > 0 && (
-                  <span className="text-xs text-red-500">{t('expense')} {symbol} {fmt(selectedSummary.expense)}</span>
+                  <span className="font-num text-xs text-gray-500">{t('expense')} {symbol} {fmt(selectedSummary.expense)}</span>
                 )}
                 {selectedSummary && selectedSummary.income > 0 && (
-                  <span className="text-xs text-green-500">{t('income')} {symbol} {fmt(selectedSummary.income)}</span>
+                  <span className="font-num text-xs text-green-600">{t('income')} {symbol} {fmt(selectedSummary.income)}</span>
                 )}
                 {selectedSummary && selectedSummary.transfer > 0 && (
-                  <span className="text-xs text-blue-500">{t('transfer')} {symbol} {fmt(selectedSummary.transfer)}</span>
+                  <span className="font-num text-xs text-blue-600">{t('transfer')} {symbol} {fmt(selectedSummary.transfer)}</span>
                 )}
               </div>
             </div>
@@ -273,26 +273,26 @@ export default function Calendar() {
                 return (
                   <button key={tx.id}
                     onClick={() => setSelectedTx(tx)}
-                    className="w-full flex items-center px-4 py-3 border-b border-gray-50 last:border-0 active:bg-gray-50 text-left transition-colors">
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl shrink-0 mr-3">
+                    className="w-full flex items-center px-4 py-3 min-h-[60px] border-b border-gray-100 last:border-0 active:bg-gray-50 text-left transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shrink-0 mr-3">
                       {tx.categories?.icon ?? '📦'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
+                      <p className="text-base text-gray-900 truncate">
                         {tx.categories?.name ?? t('uncategorized')}
                       </p>
                       {tx.description && (
-                        <p className="text-xs text-gray-400 truncate">{tx.description}</p>
+                        <p className="text-[13px] leading-[18px] text-gray-400 truncate">{tx.description}</p>
                       )}
                     </div>
-                    <div className="text-right ml-2 shrink-0">
-                      <p className={`text-sm font-semibold ${
-                        isExpense ? 'text-red-500' : isIncome ? 'text-green-500' : 'text-blue-500'
+                    <div className="text-right ml-3 shrink-0">
+                      <p className={`font-num text-base font-semibold ${
+                        isExpense ? 'text-gray-900' : isIncome ? 'text-green-600' : 'text-blue-600'
                       }`}>
                         {showMinus ? '-' : '+'}{symbol} {fmt(converted)}
                       </p>
                       {tx.currency !== displayCurrency && (
-                        <p className="text-[10px] text-gray-400">{origSymbol} {fmt(tx.amount)}</p>
+                        <p className="font-num text-xs text-gray-400">{origSymbol} {fmt(tx.amount)}</p>
                       )}
                     </div>
                   </button>

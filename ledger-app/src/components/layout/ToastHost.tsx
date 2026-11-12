@@ -35,8 +35,13 @@ export default function ToastHost() {
       // - 用 pointer-events-auto + onClick 让用户能点掉提前关闭
       // - animationDuration 用 inline style 跟 setTimeout 的 duration 对齐，
       //   否则 keyframe 固定 2s 会让长 duration 中间出现"空挂"
-      style={{ animationDuration: `${duration}ms`, transform: 'translateX(-50%)' }}
-      className="anim-toast fixed bottom-10 left-1/2 bg-black/85 text-white px-4 py-3 rounded-2xl text-sm leading-snug z-50 pointer-events-auto max-w-[85vw] break-words text-center cursor-pointer"
+      // bottom 让出 Home 指示条 + 浮动标签栏，提示不会盖在导航上
+      style={{
+        animationDuration: `${duration}ms`,
+        transform: 'translateX(-50%)',
+        bottom: 'calc(var(--sab) + 96px)',
+      }}
+      className="anim-toast fixed left-1/2 bg-black/85 text-white px-4 py-3 rounded-2xl text-sm leading-snug z-50 pointer-events-auto max-w-[85vw] break-words text-center cursor-pointer"
     >
       {msg}
     </div>

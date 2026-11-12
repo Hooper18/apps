@@ -177,47 +177,46 @@ export default function Budget() {
     <div className="anim-page flex flex-col h-full bg-gray-50">
 
       {/* Header */}
-      <div className="bg-white px-4 pt-4 pb-4 border-b border-gray-100 shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigate(-1)} className="p-1.5 -ml-1.5 rounded-full active:bg-gray-100">
-            <ChevronLeft size={22} className="text-gray-600" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-gray-800">{t('budgetTitle')}</h1>
-            <p className="text-xs text-gray-400">{monthYearLabel} · {baseCurrency}</p>
-          </div>
+      <div className="shrink-0 px-2 pt-safe-2 pb-2">
+        <button onClick={() => navigate(-1)} aria-label={t('backAriaLabel')}
+          className="w-11 h-11 flex items-center justify-center rounded-full active:bg-gray-200 transition-colors">
+          <ChevronLeft size={26} className="text-gray-900" />
+        </button>
+        <div className="px-3 pt-1">
+          <h1 className="text-[28px] leading-[34px] font-bold text-gray-900">{t('budgetTitle')}</h1>
+          <p className="text-[13px] leading-[18px] text-gray-500 mt-0.5">{monthYearLabel} · {baseCurrency}</p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-8">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-safe-6">
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-[#e53935]" />
+            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary" />
           </div>
         ) : (
           <>
             {/* ── Total budget ── */}
-            <div className="mx-4 mt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">{t('monthlyTotalBudget')}</p>
-              <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="mx-4 mt-2">
+              <p className="text-[13px] leading-[18px] text-gray-500 mb-2 px-4">{t('monthlyTotalBudget')}</p>
+              <div className="bg-white rounded-2xl p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className={`text-2xl font-bold ${totalIsOver ? 'text-[#e53935]' : 'text-gray-800'}`}>
+                    <p className={`font-num text-[28px] leading-[34px] font-bold ${totalIsOver ? 'text-red-600' : 'text-gray-900'}`}>
                       {symbol} {fmt(totalSpent)}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="font-num text-[13px] leading-[18px] text-gray-500 mt-0.5">
                       {totalBudgetAmt !== null
-                        ? <>{t('budgetLimit')} {symbol} {fmt(totalBudgetAmt)}{totalIsOver && <span className="text-[#e53935] font-semibold ml-1.5">{t('overLimit')}</span>}</>
+                        ? <>{t('budgetLimit')} {symbol} {fmt(totalBudgetAmt)}{totalIsOver && <span className="text-primary font-semibold ml-1.5">{t('overLimit')}</span>}</>
                         : t('noBudgetSet')
                       }
                     </p>
                   </div>
                   <button
                     onClick={() => openEdit(null)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded-xl active:bg-gray-200 mt-1"
+                    className="hit-44 flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 rounded-full active:bg-gray-200 transition-colors shrink-0"
                   >
-                    <Pencil size={12} className="text-gray-500" />
-                    <span className="text-xs text-gray-600 font-medium">
+                    <Pencil size={13} className="text-gray-600" />
+                    <span className="text-[13px] text-gray-900 font-medium">
                       {totalBudgetAmt !== null ? t('edit') : t('set')}
                     </span>
                   </button>
@@ -225,16 +224,16 @@ export default function Budget() {
 
                 {totalBudgetAmt !== null && (
                   <>
-                    <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${totalIsOver ? 'bg-[#e53935]' : 'bg-[#4caf50]'}`}
+                        className={`h-full rounded-full transition-all ${totalIsOver ? 'bg-red-500' : 'bg-green-500'}`}
                         style={{ width: `${totalPct}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+                    <div className="font-num flex justify-between text-xs text-gray-500 mt-2">
                       <span>{t('pctUsed', { pct: Math.round(totalPct) })}</span>
                       {totalIsOver
-                        ? <span className="text-[#e53935] font-medium">{t('over')} {symbol} {fmt(totalSpent - totalBudgetAmt)}</span>
+                        ? <span className="text-primary font-medium">{t('over')} {symbol} {fmt(totalSpent - totalBudgetAmt)}</span>
                         : <span>{t('remaining')} {symbol} {fmt(totalBudgetAmt - totalSpent)}</span>
                       }
                     </div>
@@ -245,26 +244,27 @@ export default function Budget() {
 
             {/* ── Category budgets ── */}
             <div className="mx-4 mt-5">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">{t('categoryBudget')}</p>
+              <p className="text-[13px] leading-[18px] text-gray-500 mb-2 px-4">{t('categoryBudget')}</p>
 
               {withBudgetOrSpending.length > 0 ? (
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+                <div className="bg-white rounded-2xl overflow-hidden mb-4">
                   {withBudgetOrSpending.map((cat, i) => (
-                    <div key={cat.id} className={i > 0 ? 'border-t border-gray-50' : ''}>
+                    <div key={cat.id} className={i > 0 ? 'border-t border-gray-100' : ''}>
                       <div className="px-4 py-3.5">
                         <div className="flex items-center gap-3 mb-2">
-                          <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 text-base">
+                          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0 text-lg">
                             {cat.icon}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700">{cat.name}</span>
-                              <button onClick={() => openEdit(cat.id)} className="p-1 rounded-lg active:bg-gray-100">
-                                <Pencil size={13} className="text-gray-400" />
+                              <span className="text-base text-gray-900">{cat.name}</span>
+                              <button onClick={() => openEdit(cat.id)} aria-label={t('edit')}
+                                className="w-11 h-11 -my-2.5 -mr-3 flex items-center justify-center rounded-full active:bg-gray-100 transition-colors">
+                                <Pencil size={15} className="text-gray-400" />
                               </button>
                             </div>
-                            <div className="flex items-baseline gap-1 mt-0.5">
-                              <span className={`text-sm font-semibold ${cat.isOver ? 'text-[#e53935]' : 'text-gray-700'}`}>
+                            <div className="font-num flex items-baseline gap-1 mt-0.5">
+                              <span className={`text-sm font-semibold ${cat.isOver ? 'text-red-600' : 'text-gray-900'}`}>
                                 {symbol} {fmt(cat.spent)}
                               </span>
                               {cat.budgetAmt !== null && (
@@ -277,14 +277,14 @@ export default function Budget() {
                         {cat.budgetAmt !== null && (
                           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all ${cat.isOver ? 'bg-[#e53935]' : 'bg-[#e53935]/60'}`}
+                              className={`h-full rounded-full transition-all ${cat.isOver ? 'bg-red-500' : 'bg-green-500'}`}
                               style={{ width: `${cat.pct}%` }}
                             />
                           </div>
                         )}
 
                         {cat.isOver && (
-                          <p className="text-[11px] text-[#e53935] mt-1 font-medium">
+                          <p className="font-num text-xs text-red-600 mt-1.5 font-medium">
                             ⚠ {t('over')} {symbol} {fmt(cat.spent - cat.budgetAmt!)}
                           </p>
                         )}
@@ -293,7 +293,7 @@ export default function Budget() {
                   ))}
                 </div>
               ) : (
-                <div className="bg-white rounded-2xl shadow-sm p-6 text-center mb-4">
+                <div className="bg-white rounded-2xl p-6 text-center mb-4">
                   <p className="text-3xl mb-2">🎯</p>
                   <p className="text-sm text-gray-500">{t('noCategoryBudget')}</p>
                   <p className="text-xs text-gray-400 mt-1">{t('addCategoryBudgetHint')}</p>
@@ -303,24 +303,24 @@ export default function Budget() {
               {/* Add budget for unconfigured categories */}
               {noBudgetNoSpending.length > 0 && (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">{t('addCategoryBudgetSection')}</p>
-                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <p className="text-[13px] leading-[18px] text-gray-500 mb-2 px-4">{t('addCategoryBudgetSection')}</p>
+                  <div className="bg-white rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-4">
                       {noBudgetNoSpending.map((cat, i) => (
                         <button
                           key={cat.id}
                           onClick={() => openEdit(cat.id)}
                           className={`flex flex-col items-center py-3.5 px-2 active:bg-gray-50 ${
-                            i % 4 !== 0 ? 'border-l border-gray-50' : ''
-                          } ${i >= 4 ? 'border-t border-gray-50' : ''}`}
+                            i % 4 !== 0 ? 'border-l border-gray-100' : ''
+                          } ${i >= 4 ? 'border-t border-gray-100' : ''}`}
                         >
-                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg mb-1 relative">
+                          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-lg mb-1 relative">
                             {cat.icon}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#e53935]/10 flex items-center justify-center">
-                              <Plus size={9} className="text-[#e53935]" />
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center ring-2 ring-white">
+                              <Plus size={10} strokeWidth={3} className="text-white" />
                             </div>
                           </div>
-                          <span className="text-[10px] text-gray-500 text-center leading-tight">{cat.name}</span>
+                          <span className="text-[11px] text-gray-500 text-center leading-tight">{cat.name}</span>
                         </button>
                       ))}
                     </div>
@@ -337,27 +337,30 @@ export default function Budget() {
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => !saving && setEditing(null)} />
           <div
-            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-2xl z-50"
+            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50"
             style={{ animation: 'slideUp .22s ease' }}
           >
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            <div className="flex justify-center pt-2">
+              <div className="w-9 h-[5px] bg-gray-300 rounded-full" />
             </div>
 
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-800">{editingCatName}</h2>
-              <button onClick={() => setEditing(null)} className="p-1.5 rounded-full hover:bg-gray-100">
-                <X size={18} className="text-gray-500" />
+            <div className="flex items-center justify-between pl-5 pr-3 py-2">
+              <h2 className="text-base font-semibold text-gray-900">{editingCatName}</h2>
+              <button onClick={() => setEditing(null)} aria-label={t('close')}
+                className="w-11 h-11 flex items-center justify-center group">
+                <span className="w-[30px] h-[30px] rounded-full bg-gray-50 group-active:bg-gray-200 flex items-center justify-center transition-colors">
+                  <X size={16} strokeWidth={2.4} className="text-gray-500" />
+                </span>
               </button>
             </div>
 
-            <div className="px-4 py-5 space-y-4">
+            <div className="px-4 pt-2 pb-1 space-y-4">
               <div>
-                <label className="text-xs text-gray-400 font-medium mb-1.5 block">
+                <label className="text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1 block">
                   {t('monthlyLimitLabel', { currency: baseCurrency })}
                 </label>
-                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-3 border border-gray-100 focus-within:border-[#e53935] transition-colors">
-                  <span className="text-gray-400 font-medium text-lg">{symbol}</span>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-4 h-14 border border-transparent focus-within:border-primary/40 transition-colors">
+                  <span className="font-num text-gray-400 font-medium text-lg">{symbol}</span>
                   <input
                     type="number"
                     value={editValue}
@@ -365,7 +368,7 @@ export default function Budget() {
                     placeholder="0.00"
                     min="0"
                     step="0.01"
-                    className="flex-1 bg-transparent outline-none text-xl font-semibold text-gray-800"
+                    className="font-num flex-1 min-w-0 bg-transparent outline-none text-xl font-semibold text-gray-900"
                     autoFocus
                   />
                 </div>
@@ -376,7 +379,7 @@ export default function Budget() {
                   <button
                     onClick={deleteBudget}
                     disabled={saving}
-                    className="px-4 py-3 bg-gray-100 text-gray-500 rounded-xl text-sm font-medium disabled:opacity-50 active:bg-gray-200"
+                    className="px-5 h-[50px] bg-red-50 text-red-600 rounded-xl text-base font-semibold disabled:opacity-50 active:bg-red-100 transition-colors"
                   >
                     {t('delete')}
                   </button>
@@ -384,14 +387,14 @@ export default function Budget() {
                 <button
                   onClick={saveEdit}
                   disabled={saving || !editValue || parseFloat(editValue) <= 0}
-                  className="flex-1 py-3 bg-[#e53935] text-white rounded-xl text-sm font-semibold disabled:opacity-50 active:opacity-90"
+                  className="flex-1 h-[50px] bg-primary text-white rounded-xl text-base font-semibold disabled:opacity-50 active:bg-primary-dark transition-colors"
                 >
                   {saving ? t('saving') : t('save')}
                 </button>
               </div>
             </div>
 
-            <div className="h-6" />
+            <div className="pb-safe-4" />
           </div>
           <style>{`@keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }`}</style>
         </>,

@@ -48,16 +48,16 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="anim-page min-h-screen bg-gray-50 flex flex-col justify-center px-5">
-      <div className="bg-white rounded-2xl shadow-lg p-6">
+    <div className="anim-page h-app max-w-md mx-auto overflow-y-auto bg-gray-50 flex flex-col justify-center px-4 pt-safe-4 pb-safe-6">
+      <div className="bg-white rounded-2xl p-5">
         <div className="mb-5">
-          <h1 className="text-lg font-bold text-gray-800">{t('resetPasswordTitle')}</h1>
-          <p className="text-sm text-gray-400 mt-1">{t('resetPasswordDesc')}</p>
+          <h1 className="text-xl font-bold text-gray-900">{t('resetPasswordTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('resetPasswordDesc')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('resetNewPasswordLabel')}</label>
+            <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('resetNewPasswordLabel')}</label>
             <PasswordInput
               value={newPassword}
               onChange={setNewPassword}
@@ -68,7 +68,7 @@ export default function ResetPassword() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1.5">{t('resetConfirmPasswordLabel')}</label>
+            <label className="block text-[13px] leading-[18px] text-gray-500 mb-1.5 px-1">{t('resetConfirmPasswordLabel')}</label>
             <PasswordInput
               value={confirmPassword}
               onChange={setConfirmPassword}
@@ -86,11 +86,11 @@ export default function ResetPassword() {
           )}
 
           {expired && (
-            <p className="text-center text-xs text-gray-400">
+            <p className="text-center text-sm text-gray-500">
               <button
                 type="button"
                 onClick={() => navigate('/auth')}
-                className="text-primary font-medium"
+                className="text-primary font-medium py-2 px-2 active:opacity-60"
               >
                 {t('resetGoToSignIn')}
               </button>
@@ -108,7 +108,7 @@ export default function ResetPassword() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary text-white py-3.5 rounded-xl font-semibold text-sm tracking-wide active:scale-[0.98] disabled:opacity-60 transition-all duration-150 mt-1"
+              className="w-full bg-primary text-white h-[50px] rounded-xl font-semibold text-base active:bg-primary-dark disabled:opacity-60 transition-colors mt-1"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

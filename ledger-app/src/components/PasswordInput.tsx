@@ -29,7 +29,7 @@ export default function PasswordInput({
         autoComplete={autoComplete}
         required={required}
         disabled={disabled}
-        className="w-full px-4 py-3 pr-10 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"
+        className="w-full pl-4 pr-12 h-12 rounded-xl border border-transparent bg-gray-50 focus:outline-none focus:border-primary/40 text-base text-gray-900 placeholder:text-gray-400 transition-colors"
       />
       <button
         type="button"
@@ -37,9 +37,9 @@ export default function PasswordInput({
         aria-label={show ? 'Hide password' : 'Show password'}
         onMouseDown={e => e.preventDefault()}
         onClick={() => setShow(s => !s)}
-        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 transition-colors"
+        className="absolute inset-y-0 right-0 w-12 flex items-center justify-center text-gray-400 active:text-gray-600 transition-colors"
       >
-        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        {show ? <EyeOff size={18} /> : <Eye size={18} />}
       </button>
     </div>
   )

@@ -241,6 +241,9 @@ const zh = {
   // About page
   aboutPageTitle: '关于本应用',
   backAriaLabel: '返回',
+  close: '关闭',
+  prevMonth: '上个月',
+  nextMonth: '下个月',
   loginAgreementLinkText: '服务条款和隐私政策',
 
   // Reset password landing page (ResetPassword.tsx)
@@ -511,6 +514,9 @@ const en: typeof zh = {
 
   aboutPageTitle: 'About',
   backAriaLabel: 'Back',
+  close: 'Close',
+  prevMonth: 'Previous month',
+  nextMonth: 'Next month',
   loginAgreementLinkText: 'Terms of Service and Privacy Policy',
 
   // Reset password landing page (ResetPassword.tsx)

@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { X, ChevronDown } from 'lucide-react'
+import Segmented from '../components/Segmented'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -70,12 +71,14 @@ export default function AddTransaction() {
     if (rect) {
       // 锁死宽度（88px），避免某些 WebView 下 shrink-to-fit 异常拉宽。
       // 用 right/bottom 让下拉框右对齐按钮、向上弹出。
+      // 向上弹出用 top + translateY(-100%) 定位，不用 window.innerHeight 算 bottom：
+      // iPhone 主屏幕模式下 innerHeight 会比屏幕矮一截（见 lib/viewport.ts），算出来会偏。
       setPickerStyle({
         position: 'fixed',
         right: Math.max(window.innerWidth - rect.right, 8),
-        bottom: window.innerHeight - rect.top + 4,
-        width: 88,
-        maxHeight: 180,
+        top: rect.top - 6,
+        transform: 'translateY(-100%)',
+        width: 96,
       })
     }
     setShowCPicker(true)
@@ -101,9 +104,9 @@ export default function AddTransaction() {
   const [dateMode, setDateMode] = useState<DateMode>(initDateMode)
 
   const TYPE_CONFIG = {
-    expense:  { label: t('expense'), active: 'text-red-500 border-red-500'    },
-    income:   { label: t('income'),  active: 'text-green-500 border-green-500' },
-    transfer: { label: t('transfer'), active: 'text-blue-500 border-blue-500'  },
+    expense:  { label: t('expense')  },
+    income:   { label: t('income')   },
+    transfer: { label: t('transfer') },
   }
 
   // "最近使用优先"模式的 lastUsedAt 直接从 transactions 派生：每个
@@ -228,31 +231,29 @@ export default function AddTransaction() {
     <div className="anim-page flex flex-col h-full bg-white">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2">
-          <X size={22} className="text-gray-600" />
+      <div className="shrink-0 flex items-center justify-between px-2 pt-safe-2 pb-1">
+        <button onClick={() => navigate(-1)} aria-label={t('close')}
+          className="w-11 h-11 flex items-center justify-center group">
+          <span className="w-[30px] h-[30px] rounded-full bg-gray-50 group-active:bg-gray-200 flex items-center justify-center transition-colors">
+            <X size={16} strokeWidth={2.4} className="text-gray-500" />
+          </span>
         </button>
-        <h1 className="text-base font-semibold">{editTx ? t('editTx') : t('addTx')}</h1>
-        <div className="w-9" />
+        <h1 className="text-base font-semibold text-gray-900">{editTx ? t('editTx') : t('addTx')}</h1>
+        <div className="w-11" />
       </div>
 
       {/* Type tabs */}
-      <div className="flex border-b border-gray-100">
-        {(Object.keys(TYPE_CONFIG) as TransactionType[]).map(tp => (
-          <button key={tp}
-            onClick={() => { setType(tp); setSelected('') }}
-            className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
-              type === tp ? TYPE_CONFIG[tp].active : 'text-gray-400 border-transparent'
-            }`}
-          >
-            {TYPE_CONFIG[tp].label}
-          </button>
-        ))}
+      <div className="shrink-0 px-4 pt-1 pb-2">
+        <Segmented
+          options={(Object.keys(TYPE_CONFIG) as TransactionType[]).map(tp => ({ value: tp, label: TYPE_CONFIG[tp].label }))}
+          value={type}
+          onChange={tp => { setType(tp); setSelected('') }}
+        />
       </div>
 
       {/* Transfer direction sub-row — only when type=transfer */}
       {type === 'transfer' && (
-        <div className="flex items-center justify-center gap-1 px-4 py-2 border-b border-gray-100 bg-gray-50">
+        <div className="shrink-0 flex items-center justify-center gap-2 px-4 pb-2">
           {([
             { v: 'in'  as const, label: t('transferIn'),  prefix: '+' },
             { v: 'out' as const, label: t('transferOut'), prefix: '−' },
@@ -260,10 +261,10 @@ export default function AddTransaction() {
             <button key={v}
               type="button"
               onClick={() => setTransferDir(v)}
-              className={`flex-1 max-w-[160px] py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`hit-44 flex-1 max-w-[160px] h-8 rounded-full text-[13px] font-medium transition-colors ${
                 transferDir === v
-                  ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
-                  : 'bg-white border-gray-200 text-gray-500'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-50 text-gray-600 active:bg-gray-100'
               }`}
             >
               {prefix} {label}
@@ -277,20 +278,20 @@ export default function AddTransaction() {
 
         {/* Category grid — fixed height, inner scroll */}
         <div className="relative shrink-0">
-          <div className="grid grid-cols-5 gap-1 px-3 py-3 max-h-48 overflow-y-auto no-scrollbar">
+          <div className="grid grid-cols-5 gap-1 px-3 pt-1 pb-3 max-h-48 tall:max-h-64 overflow-y-auto no-scrollbar">
           {categories.map(cat => (
             <button key={cat.id} onClick={() => setSelected(cat.id)}
-              className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-colors active:scale-[0.96] ${
-                selectedCategory === cat.id ? 'bg-blue-50' : ''
-              }`}
+              aria-pressed={selectedCategory === cat.id}
+              className="flex flex-col items-center gap-1 py-1.5 px-1 rounded-xl transition-transform active:scale-[0.96]"
             >
-              <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl transition-[background-color,transform] duration-150 ${
-                selectedCategory === cat.id ? 'bg-blue-500 scale-105' : 'bg-gray-100'
+              {/* 选中态用强调色描边 + 淡底，不再用蓝色：全 App 只有一个"选中 / 可点"的颜色 */}
+              <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl transition-colors duration-150 ${
+                selectedCategory === cat.id ? 'bg-primary/10 ring-2 ring-primary' : 'bg-gray-50'
               }`}>
                 {cat.icon}
               </div>
-              <span className={`text-[10px] leading-tight text-center break-all ${
-                selectedCategory === cat.id ? 'text-blue-500 font-semibold' : 'text-gray-500'
+              <span className={`text-[11px] leading-tight text-center break-all ${
+                selectedCategory === cat.id ? 'text-primary font-semibold' : 'text-gray-500'
               }`}>
                 {cat.name}
               </span>
@@ -305,14 +306,14 @@ export default function AddTransaction() {
         <div className="px-4 mb-2">
           <input type="text" value={note} onChange={e => setNote(e.target.value)}
             placeholder={t('notePlaceholder')} maxLength={50}
-            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-blue-400 focus:bg-white transition-colors"
+            className="w-full px-4 h-11 bg-gray-50 border border-transparent rounded-xl text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-primary/40 transition-colors"
           />
         </div>
 
         {/* Date + Currency */}
         <div className="px-4 pb-3 shrink-0">
           {/* Quick date buttons + currency on same row */}
-          <div className="flex gap-1 items-center">
+          <div className="flex gap-1.5 items-center">
             {([
               { mode: 'today',     label: t('today'),           d: today     },
               { mode: 'yesterday', label: t('yesterday'),       d: yesterday },
@@ -324,19 +325,19 @@ export default function AddTransaction() {
                   setDateMode(mode)
                   if (d) setDate(d)
                 }}
-                className={`flex-1 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                className={`hit-44 flex-1 min-w-0 h-8 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
                   dateMode === mode
-                    ? 'bg-[#e53935] border-[#e53935] text-white'
-                    : 'bg-white border-gray-200 text-gray-500'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-50 text-gray-600 active:bg-gray-100'
                 }`}
               >
                 {label}
               </button>
             ))}
             {/* Currency picker — small dropdown that opens upward via portal */}
-            <div className="shrink-0 ml-1">
+            <div className="shrink-0">
               <button ref={currencyBtnRef} onClick={openCurrencyPicker}
-                className="flex items-center gap-0.5 px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium whitespace-nowrap">
+                className="hit-44 flex items-center gap-0.5 h-8 pl-3 pr-2 bg-gray-50 rounded-full text-[13px] font-semibold text-gray-900 whitespace-nowrap active:bg-gray-100 transition-colors">
                 {currency}<ChevronDown size={12} className="text-gray-400" />
               </button>
             </div>
@@ -344,72 +345,72 @@ export default function AddTransaction() {
           {/* Custom date input — only shown when "其他/Other" is active */}
           {dateMode === 'other' && (
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="w-full mt-1.5 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-blue-400 focus:bg-white transition-colors"
+              className="w-full mt-2 px-3 h-11 bg-gray-50 border border-transparent rounded-xl text-base outline-none focus:border-primary/40 transition-colors"
             />
           )}
         </div>
       </div>
 
       {/* Fixed bottom: amount + numpad */}
-      <div className="shrink-0 border-t border-gray-100 bg-white px-4 pt-2 pb-2">
+      <div className="shrink-0 bg-white px-3 pt-2 pb-safe-2">
 
         {/* Amount display */}
-        <div className="flex items-baseline gap-1 bg-gray-50 rounded-xl px-4 py-1.5 mb-1.5">
-          <span className="text-lg text-gray-400">{symbol}</span>
-          <span className="text-3xl font-bold text-gray-800 tracking-tight flex-1 truncate">{amount}</span>
+        <div className="flex items-baseline gap-1.5 px-2 pb-2">
+          <span className="font-num text-lg text-gray-400">{symbol}</span>
+          <span className="font-num text-3xl font-bold text-gray-900 tracking-tight flex-1 truncate">{amount}</span>
         </div>
 
         {/* Numpad */}
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-4 gap-1.5">
           {['7','8','9'].map(k => (
             <button key={k} onClick={() => numPress(k)}
-              className="py-[7px] bg-gray-50 rounded-xl text-lg font-medium text-gray-800 active:scale-95 transition-transform">
+              className="font-num h-[42px] tall:h-[52px] bg-gray-50 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
               {k}
             </button>
           ))}
           <button onClick={numDel}
-            className="py-[7px] bg-white border border-gray-100 rounded-xl text-base text-gray-500 active:scale-95 transition-transform">
+            className="h-[42px] tall:h-[52px] bg-gray-100 rounded-xl text-lg text-gray-600 active:bg-gray-200 transition-colors">
             ⌫
           </button>
 
           {['4','5','6'].map(k => (
             <button key={k} onClick={() => numPress(k)}
-              className="py-[7px] bg-gray-50 rounded-xl text-lg font-medium text-gray-800 active:scale-95 transition-transform">
+              className="font-num h-[42px] tall:h-[52px] bg-gray-50 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
               {k}
             </button>
           ))}
           {/* "再记/More" only shown in add mode */}
           {editTx ? (
-            <div className="py-[7px] bg-gray-50 rounded-xl" />
+            <div className="h-[42px] tall:h-[52px] bg-gray-50 rounded-xl" />
           ) : (
             <button onClick={() => handleSave(true)} disabled={submitting}
-              className="py-[7px] bg-blue-500 text-white rounded-xl text-sm font-semibold active:scale-95 transition-transform disabled:opacity-50">
+              className="h-[42px] tall:h-[52px] bg-primary/10 text-primary rounded-xl text-sm font-semibold active:bg-primary/20 transition-colors disabled:opacity-50">
               {t('addAgain')}
             </button>
           )}
 
           {['1','2','3'].map(k => (
             <button key={k} onClick={() => numPress(k)}
-              className="py-[7px] bg-gray-50 rounded-xl text-lg font-medium text-gray-800 active:scale-95 transition-transform">
+              className="font-num h-[42px] tall:h-[52px] bg-gray-50 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
               {k}
             </button>
           ))}
           {/* Save/update spans 2 rows */}
           <button onClick={() => handleSave(false)} disabled={submitting}
-            className="row-span-2 bg-red-500 text-white rounded-xl text-[15px] font-semibold active:scale-95 transition-transform disabled:opacity-50">
+            className="row-span-2 bg-primary text-white rounded-xl text-base font-semibold active:bg-primary-dark transition-colors disabled:opacity-50">
             {submitting ? '…' : editTx ? t('update') : t('save')}
           </button>
 
           <button onClick={() => numPress('0')}
-            className="py-[7px] bg-gray-50 rounded-xl text-lg font-medium text-gray-800 active:scale-95 transition-transform">
+            className="font-num h-[42px] tall:h-[52px] bg-gray-50 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
             0
           </button>
           <button onClick={() => numPress('00')}
-            className="py-[7px] bg-gray-50 rounded-xl text-lg font-medium text-gray-800 active:scale-95 transition-transform">
+            className="font-num h-[42px] tall:h-[52px] bg-gray-50 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
             00
           </button>
           <button onClick={() => numPress('.')}
-            className="py-[7px] bg-white border border-gray-100 rounded-xl text-lg text-gray-600 active:scale-95 transition-transform">
+            className="font-num h-[42px] tall:h-[52px] bg-gray-100 rounded-xl text-xl font-medium text-gray-900 active:bg-gray-200 transition-colors">
             .
           </button>
         </div>
@@ -419,25 +420,26 @@ export default function AddTransaction() {
       {showCurrencyPicker && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowCPicker(false)} />
-          <div
-            className="anim-rise-fade bg-white border border-gray-100 rounded-xl shadow-lg z-50 overflow-y-auto"
-            style={pickerStyle}
-          >
-            {SUPPORTED_CURRENCIES.map(c => (
-              <button key={c} onClick={() => { setCurrency(c); setShowCPicker(false) }}
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${
-                  currency === c ? 'text-red-500 font-semibold' : 'text-gray-700'
-                }`}>
-                {c}
-              </button>
-            ))}
+          {/* 外层只负责定位（transform 向上翻），内层才做入场动画 —— 动画也用 transform，放同一层会互相覆盖 */}
+          <div className="z-50" style={pickerStyle}>
+            <div className="anim-rise-fade bg-white rounded-xl shadow-glass overflow-y-auto py-1 max-h-[224px]">
+              {SUPPORTED_CURRENCIES.map(c => (
+                <button key={c} onClick={() => { setCurrency(c); setShowCPicker(false) }}
+                  className={`w-full px-4 h-10 text-left text-sm active:bg-gray-50 ${
+                    currency === c ? 'text-primary font-semibold' : 'text-gray-900'
+                  }`}>
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
         </>,
         document.body,
       )}
 
       {toast && (
-        <div className="anim-toast fixed bottom-10 left-1/2 bg-black/75 text-white px-5 py-2.5 rounded-full text-sm whitespace-nowrap z-50 pointer-events-none">
+        <div className="anim-toast fixed left-1/2 bg-black/80 text-white px-5 py-2.5 rounded-full text-sm whitespace-nowrap z-50 pointer-events-none"
+          style={{ bottom: 'calc(var(--sab) + 40px)' }}>
           {toast}
         </div>
       )}

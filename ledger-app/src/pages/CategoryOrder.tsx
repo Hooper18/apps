@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronUp, ChevronDown } from 'lucide-react'
+import Segmented from '../components/Segmented'
 import { useCategories } from '../hooks/useCategories'
 import { useCategorySort } from '../hooks/useCategorySort'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -56,40 +57,31 @@ export default function CategoryOrder() {
     setCustomOrder(type, next.map((r) => r.id))
   }
 
-  const TYPE_TABS: { value: TransactionType; label: string; active: string }[] = [
-    { value: 'expense',  label: t('expense'),  active: 'text-red-500 border-red-500' },
-    { value: 'income',   label: t('income'),   active: 'text-green-500 border-green-500' },
-    { value: 'transfer', label: t('transfer'), active: 'text-blue-500 border-blue-500' },
+  const TYPE_TABS: { value: TransactionType; label: string }[] = [
+    { value: 'expense',  label: t('expense')  },
+    { value: 'income',   label: t('income')   },
+    { value: 'transfer', label: t('transfer') },
   ]
 
   return (
     <div className="anim-page flex flex-col h-full bg-white">
 
       {/* Header */}
-      <div className="flex items-center px-2 pt-4 pb-3 border-b border-gray-100 shrink-0">
-        <button onClick={() => navigate(-1)} className="p-2" aria-label={t('backAriaLabel')}>
-          <ChevronLeft size={22} className="text-gray-600" />
+      <div className="flex items-center px-2 pt-safe-2 pb-1 shrink-0">
+        <button onClick={() => navigate(-1)} aria-label={t('backAriaLabel')}
+          className="w-11 h-11 flex items-center justify-center rounded-full active:bg-gray-100 transition-colors">
+          <ChevronLeft size={26} className="text-gray-900" />
         </button>
-        <h1 className="flex-1 text-base font-semibold text-center -ml-9">{t('categoryOrderTitle')}</h1>
+        <h1 className="flex-1 text-base font-semibold text-gray-900 text-center -ml-11 pointer-events-none">{t('categoryOrderTitle')}</h1>
       </div>
 
       {/* Type tabs */}
-      <div className="flex border-b border-gray-100 shrink-0">
-        {TYPE_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setType(tab.value)}
-            className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
-              type === tab.value ? tab.active : 'text-gray-400 border-transparent'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="shrink-0 px-4 pt-1 pb-2">
+        <Segmented options={TYPE_TABS} value={type} onChange={setType} />
       </div>
 
       {/* Reorderable list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-safe-4">
         {rows.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-10">{t('categoryOrderEmpty')}</p>
         ) : (
@@ -97,27 +89,27 @@ export default function CategoryOrder() {
             {rows.map((row, i) => (
               <li
                 key={row.id}
-                className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-gray-50' : ''}`}
+                className={`flex items-center gap-3 pl-5 pr-2 py-2 ${i > 0 ? 'border-t border-gray-100' : ''}`}
               >
-                <span className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-lg shrink-0">
+                <span className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-lg shrink-0">
                   {row.icon}
                 </span>
-                <span className="flex-1 text-sm text-gray-800 truncate">{row.name}</span>
+                <span className="flex-1 text-base text-gray-900 truncate">{row.name}</span>
                 <button
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
                   aria-label={t('categoryOrderUp')}
-                  className="p-2 rounded-lg active:bg-gray-100 active:scale-90 transition-transform disabled:opacity-30 disabled:active:bg-transparent disabled:active:scale-100"
+                  className="w-11 h-11 flex items-center justify-center rounded-full active:bg-gray-100 transition-colors disabled:opacity-25 disabled:active:bg-transparent"
                 >
-                  <ChevronUp size={18} className="text-gray-600" />
+                  <ChevronUp size={22} className="text-gray-700" />
                 </button>
                 <button
                   onClick={() => move(i, 1)}
                   disabled={i === rows.length - 1}
                   aria-label={t('categoryOrderDown')}
-                  className="p-2 rounded-lg active:bg-gray-100 active:scale-90 transition-transform disabled:opacity-30 disabled:active:bg-transparent disabled:active:scale-100"
+                  className="w-11 h-11 flex items-center justify-center rounded-full active:bg-gray-100 transition-colors disabled:opacity-25 disabled:active:bg-transparent"
                 >
-                  <ChevronDown size={18} className="text-gray-600" />
+                  <ChevronDown size={22} className="text-gray-700" />
                 </button>
               </li>
             ))}

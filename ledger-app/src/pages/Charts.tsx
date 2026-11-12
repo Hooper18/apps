@@ -11,6 +11,7 @@ import {
 import type { TooltipItem } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
 import { ChevronDown, ChevronLeft, ChevronRight, Info } from 'lucide-react'
+import Segmented from '../components/Segmented'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { TranslationKey } from '../lib/i18n'
@@ -600,20 +601,24 @@ export default function Charts() {
 
   const Spinner = () => (
     <div className="h-48 flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-[#e53935] border-t-transparent rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
   const MonthNav = ({ title }: { title: string }) => (
-    <div className="flex items-center justify-between mb-4">
-      <button onClick={() => changeMonth(-1)}
-        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200">
-        <ChevronLeft size={16} />
+    <div className="flex items-center justify-between mb-3 -mx-1.5 -mt-1.5">
+      <button onClick={() => changeMonth(-1)} aria-label={t('prevMonth')}
+        className="w-11 h-11 flex items-center justify-center group">
+        <span className="w-8 h-8 rounded-full bg-gray-50 group-active:bg-gray-200 flex items-center justify-center transition-colors">
+          <ChevronLeft size={18} className="text-gray-700" />
+        </span>
       </button>
-      <p className="text-sm font-semibold text-gray-700">{title}</p>
-      <button onClick={() => changeMonth(1)} disabled={isCurrentMonth}
-        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200 disabled:opacity-30">
-        <ChevronRight size={16} />
+      <p className="text-base font-semibold text-gray-900">{title}</p>
+      <button onClick={() => changeMonth(1)} disabled={isCurrentMonth} aria-label={t('nextMonth')}
+        className="w-11 h-11 flex items-center justify-center group disabled:opacity-30">
+        <span className="w-8 h-8 rounded-full bg-gray-50 group-active:bg-gray-200 flex items-center justify-center transition-colors">
+          <ChevronRight size={18} className="text-gray-700" />
+        </span>
       </button>
     </div>
   )
@@ -632,36 +637,33 @@ export default function Charts() {
     <div className="anim-page flex flex-col h-full bg-gray-50">
 
       {/* Header + Tabs */}
-      <div className="bg-white px-4 pt-4 pb-0 border-b border-gray-100 shrink-0">
-        <h1 className="text-lg font-bold text-gray-800 mb-3">{t('statsTitle')}</h1>
-        <div className="flex">
-          {TABS.map(tabItem => (
-            <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
-              className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                tab === tabItem.key ? 'border-[#e53935] text-[#e53935]' : 'border-transparent text-gray-400'
-              }`}>
-              {tabItem.label}
-            </button>
-          ))}
-        </div>
+      <div className="shrink-0 px-4 pt-safe-3 pb-3">
+        <h1 className="px-1 text-[28px] leading-[34px] font-bold text-gray-900 mb-3">{t('statsTitle')}</h1>
+        {TABS.length > 0 && (
+          <Segmented
+            options={TABS.map(tabItem => ({ value: tabItem.key, label: tabItem.label }))}
+            value={tab}
+            onChange={setTab}
+          />
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-4 pb-page">
 
         {/* ── Overview ── */}
         {tab === 'overview' && (
           <>
             {/* Summary cards */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-xl p-3 shadow-sm">
+              <div className="bg-white rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-1">{t('income')}</p>
                 <p className="text-sm font-semibold text-green-600 truncate">{symbol} {fmt(totalIncome)}</p>
               </div>
-              <div className="bg-white rounded-xl p-3 shadow-sm">
+              <div className="bg-white rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-1">{t('expense')}</p>
-                <p className="text-sm font-semibold text-[#e53935] truncate">{symbol} {fmt(totalExpense)}</p>
+                <p className="text-sm font-semibold text-primary truncate">{symbol} {fmt(totalExpense)}</p>
               </div>
-              <div className="bg-white rounded-xl p-3 shadow-sm">
+              <div className="bg-white rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-1">{t('balance')}</p>
                 <p className={`text-sm font-semibold truncate ${totalBalance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                   {symbol} {fmt(totalBalance)}
@@ -670,7 +672,7 @@ export default function Charts() {
             </div>
 
             {/* Bar chart with range toggle */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="bg-white rounded-2xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm font-semibold text-gray-700">
                   {t('last6Months').replace('{n}', String(overviewRange))}
@@ -678,8 +680,8 @@ export default function Charts() {
                 <div className="flex bg-gray-100 rounded-lg p-0.5">
                   {([6, 12] as const).map(r => (
                     <button key={r} onClick={() => setOverviewRange(r)}
-                      className={`px-2.5 py-0.5 text-xs font-medium rounded-md transition-colors ${
-                        overviewRange === r ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
+                      className={`hit-44 px-2.5 h-7 text-xs font-medium rounded-md transition-colors ${
+                        overviewRange === r ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]' : 'text-gray-500'
                       }`}>
                       {r}{lang === 'zh' ? '个月' : 'M'}
                     </button>
@@ -695,7 +697,7 @@ export default function Charts() {
 
             {/* Month-by-month breakdown list */}
             {!overviewLoading && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <div className="bg-white rounded-2xl p-4">
                 <p className="text-sm font-semibold text-gray-700 mb-3">{t('monthlyBreakdown')}</p>
                 <div className="space-y-3">
                   {[...overview].reverse().map(d => {
@@ -709,7 +711,7 @@ export default function Charts() {
                     const maxInc = Math.max(...overview.map(o => o.income), 0.001)
                     return (
                       <div key={d.month} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-400 w-16 shrink-0">{label}</span>
+                        <span className="text-xs text-gray-400 w-[72px] shrink-0 whitespace-nowrap">{label}</span>
                         <div className="flex-1 flex flex-col gap-1">
                           {d.income > 0 && (
                             <div className="h-1.5 rounded-full bg-green-100 overflow-hidden">
@@ -719,12 +721,12 @@ export default function Charts() {
                           )}
                           {d.expense > 0 && (
                             <div className="h-1.5 rounded-full bg-red-100 overflow-hidden">
-                              <div className="h-full bg-[#e53935] rounded-full transition-all"
+                              <div className="h-full bg-primary rounded-full transition-all"
                                 style={{ width: `${(d.expense / maxExp) * 100}%` }} />
                             </div>
                           )}
                         </div>
-                        <span className={`text-xs font-medium w-20 text-right shrink-0 ${net >= 0 ? 'text-green-600' : 'text-[#e53935]'}`}>
+                        <span className={`text-xs font-medium w-20 text-right shrink-0 ${net >= 0 ? 'text-green-600' : 'text-primary'}`}>
                           {net >= 0 ? '+' : ''}{symbol} {Math.round(Math.abs(net))}
                         </span>
                       </div>
@@ -738,7 +740,7 @@ export default function Charts() {
 
         {/* ── Daily ── */}
         {tab === 'daily' && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="bg-white rounded-2xl p-4">
             <MonthNav title={dailyTitle} />
             {monthlyLoading ? <Spinner /> : dailyData.every(d => d.expense === 0) ? (
               <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-2">
@@ -759,9 +761,9 @@ export default function Charts() {
                         : ' '}
                     </p>
                     <button onClick={() => setExcludeOutliers(v => !v)}
-                      className={`text-xs px-2 py-0.5 rounded-md transition-colors ${
+                      className={`hit-44 text-xs px-2.5 h-7 rounded-full transition-colors ${
                         excludeOutliers
-                          ? 'bg-[#e53935] text-white'
+                          ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-500 active:bg-gray-200'
                       }`}>
                       {t('excludeOutliersBtn')}
@@ -794,7 +796,7 @@ export default function Charts() {
                         {lang === 'zh' ? `${selectedDay}日明细` : `Day ${selectedDay} Details`}
                       </p>
                       <button onClick={() => setSelectedDay(null)}
-                        className="text-xs text-gray-400 active:text-gray-600">
+                        className="hit-44 text-xs font-medium text-primary active:opacity-60">
                         {lang === 'zh' ? '收起' : 'Close'}
                       </button>
                     </div>
@@ -810,7 +812,7 @@ export default function Charts() {
                                 <p className="text-sm text-gray-700 truncate">{tx.categories?.name ?? t('uncategorized')}</p>
                                 {tx.description && <p className="text-xs text-gray-400 truncate">{tx.description}</p>}
                               </div>
-                              <span className={`text-sm font-semibold shrink-0 ${tx.type === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
+                              <span className={`text-sm font-semibold shrink-0 ${tx.type === 'expense' ? 'text-primary' : 'text-green-600'}`}>
                                 {tx.type === 'expense' ? '-' : '+'}{symbol} {fmt(cvtTx(tx.amount, tx.currency, tx.exchange_rate))}
                               </span>
                             </div>
@@ -818,7 +820,7 @@ export default function Charts() {
                         </div>
                         <div className="flex justify-between pt-2 mt-1 border-t border-gray-200">
                           <span className="text-xs text-gray-400">{lang === 'zh' ? '当日支出' : 'Day total'}</span>
-                          <span className="text-sm font-semibold text-[#e53935]">
+                          <span className="text-sm font-semibold text-primary">
                             {symbol} {fmt(dayTxs.filter(tx => tx.type === 'expense').reduce((s, tx) => s + cvtTx(tx.amount, tx.currency, tx.exchange_rate), 0))}
                           </span>
                         </div>
@@ -834,23 +836,19 @@ export default function Charts() {
 
         {/* ── Category ── */}
         {tab === 'category' && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="bg-white rounded-2xl p-4">
             <MonthNav title={categoryTitle} />
 
             {/* expense / income toggle */}
-            <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
-              {(['expense', 'income'] as const).map(txType => (
-                <button key={txType}
-                  onClick={() => { setCatType(txType); setSelectedCatId(null); setHiddenCatIds(new Set()); setExpandedCatDay(null) }}
-                  className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                    catType === txType
-                      ? txType === 'expense' ? 'bg-[#e53935] text-white shadow-sm' : 'bg-green-500 text-white shadow-sm'
-                      : 'text-gray-500'
-                  }`}>
-                  {txType === 'expense' ? t('expense') : t('income')}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              className="mb-4"
+              options={[
+                { value: 'expense' as const, label: t('expense') },
+                { value: 'income' as const, label: t('income') },
+              ]}
+              value={catType}
+              onChange={txType => { setCatType(txType); setSelectedCatId(null); setHiddenCatIds(new Set()); setExpandedCatDay(null) }}
+            />
 
             {monthlyLoading ? <Spinner /> : catData.length === 0 ? (
               <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-2">
@@ -861,8 +859,8 @@ export default function Charts() {
               /* ── Category daily breakdown ── */
               <>
                 <button onClick={() => { setSelectedCatId(null); setExpandedCatDay(null) }}
-                  className="flex items-center gap-1 text-sm text-gray-400 mb-3 -mt-1 active:text-gray-600">
-                  <ChevronLeft size={15} />
+                  className="flex items-center gap-0.5 h-9 -ml-1.5 pr-2 text-sm font-medium text-primary mb-2 -mt-1 active:opacity-60">
+                  <ChevronLeft size={18} />
                   <span>{t('tabCategory')}</span>
                 </button>
 
@@ -965,7 +963,7 @@ export default function Charts() {
                                             </p>
                                           )}
                                         </div>
-                                        <span className={`text-sm font-semibold shrink-0 ${catType === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
+                                        <span className={`text-sm font-semibold shrink-0 ${catType === 'expense' ? 'text-primary' : 'text-green-600'}`}>
                                           {catType === 'expense' ? '-' : '+'}{symbol} {fmt(cvtTx(tx.amount, tx.currency, tx.exchange_rate))}
                                         </span>
                                       </div>
@@ -975,7 +973,7 @@ export default function Charts() {
                                     <span className="text-xs text-gray-400">
                                       {`${lang === 'zh' ? '当日合计' : 'Day total'} · ${t('catTxCount', { n: catDayTxs.length })}`}
                                     </span>
-                                    <span className={`text-sm font-semibold ${catType === 'expense' ? 'text-[#e53935]' : 'text-green-600'}`}>
+                                    <span className={`text-sm font-semibold ${catType === 'expense' ? 'text-primary' : 'text-green-600'}`}>
                                       {symbol} {fmt(d.amount)}
                                     </span>
                                   </div>
@@ -1031,9 +1029,9 @@ export default function Charts() {
                         </span>
                         <button
                           onClick={e => { e.stopPropagation(); setSelectedCatId(d.id); setExpandedCatDay(null) }}
-                          className="shrink-0 -mr-1 text-gray-300 active:text-gray-500 transition-colors"
+                          className="hit-row shrink-0 -mr-1 text-gray-400 active:text-gray-600 transition-colors"
                           aria-label={t('catDailyDetail')}>
-                          <ChevronRight size={14} />
+                          <ChevronRight size={16} />
                         </button>
                       </div>
                     )
@@ -1047,7 +1045,7 @@ export default function Charts() {
         {/* ── Extra ── */}
         {tab === 'extra' && (
           <div className="space-y-3">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="bg-white rounded-2xl p-4">
               <MonthNav title={extraTitle} />
 
               {monthlyLoading ? <Spinner /> : (
@@ -1059,7 +1057,7 @@ export default function Charts() {
                       <p className="text-xs text-gray-400 mb-1">
                         {lang === 'zh' ? '日均支出' : 'Avg Daily Expense'}
                       </p>
-                      <p className="text-sm font-semibold text-[#e53935]">{symbol} {fmt(extraStats.avgDailyExp)}</p>
+                      <p className="text-sm font-semibold text-primary">{symbol} {fmt(extraStats.avgDailyExp)}</p>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">
@@ -1067,7 +1065,7 @@ export default function Charts() {
                       </p>
                       <p className={`text-sm font-semibold ${
                         extraStats.savingsRate === null ? 'text-gray-400'
-                        : extraStats.savingsRate >= 0 ? 'text-green-600' : 'text-[#e53935]'
+                        : extraStats.savingsRate >= 0 ? 'text-green-600' : 'text-primary'
                       }`}>
                         {extraStats.savingsRate !== null ? `${extraStats.savingsRate.toFixed(1)}%` : '—'}
                       </p>
@@ -1088,7 +1086,7 @@ export default function Charts() {
                           </p>
                           <p className="text-xs text-gray-400">{extraStats.maxExpTx.date}</p>
                         </div>
-                        <p className="text-sm font-semibold text-[#e53935] shrink-0">
+                        <p className="text-sm font-semibold text-primary shrink-0">
                           {symbol} {fmt(cvtTx(extraStats.maxExpTx.amount, extraStats.maxExpTx.currency, extraStats.maxExpTx.exchange_rate))}
                         </p>
                       </div>
@@ -1104,7 +1102,7 @@ export default function Charts() {
                       <div className="flex items-center gap-3">
                         <span className="text-xl shrink-0">{extraStats.topCat.icon}</span>
                         <p className="text-sm text-gray-700 flex-1 truncate">{extraStats.topCat.name}</p>
-                        <p className="text-sm font-semibold text-[#e53935] shrink-0">
+                        <p className="text-sm font-semibold text-primary shrink-0">
                           {symbol} {fmt(extraStats.topCat.total)}
                         </p>
                       </div>
@@ -1132,9 +1130,9 @@ export default function Charts() {
                               onClick={() => setEngelInfoOpen(v => !v)}
                               aria-label={t('engelInfoAria')}
                               aria-expanded={engelInfoOpen}
-                              className="p-0.5 -m-0.5 text-gray-400 hover:text-gray-600 active:text-gray-700 transition-colors"
+                              className="hit-44 p-0.5 -m-0.5 text-gray-400 active:text-gray-700 transition-colors"
                             >
-                              <Info size={12} />
+                              <Info size={14} />
                             </button>
                           </div>
                           <p className="text-base font-semibold text-gray-800">
@@ -1173,7 +1171,7 @@ export default function Charts() {
                                         {t(tt.key)}
                                       </span>
                                       {active && (
-                                        <span className="ml-auto shrink-0 text-[10px] text-gray-400">{t('engelTierCurrent')}</span>
+                                        <span className="ml-auto shrink-0 text-[11px] text-gray-400">{t('engelTierCurrent')}</span>
                                       )}
                                     </div>
                                   )
@@ -1217,9 +1215,9 @@ export default function Charts() {
                               onClick={() => setMomInfoOpen(v => !v)}
                               aria-label={t('momInfoAria')}
                               aria-expanded={momInfoOpen}
-                              className="p-0.5 -m-0.5 text-gray-400 hover:text-gray-600 active:text-gray-700 transition-colors"
+                              className="hit-44 p-0.5 -m-0.5 text-gray-400 active:text-gray-700 transition-colors"
                             >
-                              <Info size={12} />
+                              <Info size={14} />
                             </button>
                           </div>
                           {/* 只有本月未过完（同期≠整月）才需要切换 */}
@@ -1231,8 +1229,8 @@ export default function Charts() {
                                   type="button"
                                   onClick={() => changeMomMode(m)}
                                   aria-pressed={momMode === m}
-                                  className={`px-2 py-0.5 rounded-md transition-colors ${
-                                    momMode === m ? 'bg-white text-gray-800 font-medium' : 'text-gray-500'
+                                  className={`hit-44 px-2.5 h-7 rounded-md transition-colors ${
+                                    momMode === m ? 'bg-white text-gray-900 font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]' : 'text-gray-500'
                                   }`}
                                 >
                                   {m === 'same' ? t('momModeSame') : t('momModeFull')}
@@ -1245,7 +1243,7 @@ export default function Charts() {
                           <div>
                             <p className="text-xs text-gray-500 mb-0.5">{t('momExpense')}</p>
                             {expDelta !== null ? (
-                              <p className={`text-sm font-semibold ${expDelta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
+                              <p className={`text-sm font-semibold ${expDelta > 0 ? 'text-primary' : 'text-green-600'}`}>
                                 {expDelta > 0 ? '+' : ''}{expDelta.toFixed(1)}%
                               </p>
                             ) : (
@@ -1255,7 +1253,7 @@ export default function Charts() {
                           <div>
                             <p className="text-xs text-gray-500 mb-0.5">{t('momIncome')}</p>
                             {incDelta !== null ? (
-                              <p className={`text-sm font-semibold ${incDelta >= 0 ? 'text-green-600' : 'text-[#e53935]'}`}>
+                              <p className={`text-sm font-semibold ${incDelta >= 0 ? 'text-green-600' : 'text-primary'}`}>
                                 {incDelta > 0 ? '+' : ''}{incDelta.toFixed(1)}%
                               </p>
                             ) : (
@@ -1288,11 +1286,11 @@ export default function Charts() {
                             <div className="w-full rounded-t-sm relative overflow-hidden bg-gray-200"
                               style={{ height: 44 }}>
                               <div
-                                className={`absolute bottom-0 w-full rounded-t-sm transition-all ${i === extraStats.maxDow ? 'bg-[#e53935]' : 'bg-gray-300'}`}
+                                className={`absolute bottom-0 w-full rounded-t-sm transition-all ${i === extraStats.maxDow ? 'bg-primary' : 'bg-gray-300'}`}
                                 style={{ height: `${(v / maxV) * 100}%` }}
                               />
                             </div>
-                            <span className="text-[9px] text-gray-400 leading-none">
+                            <span className="text-[11px] text-gray-400 leading-none">
                               {t(weekdayKeys[i]).replace('周', '')}
                             </span>
                           </div>
@@ -1317,7 +1315,7 @@ export default function Charts() {
         {/* ── Transfer ── */}
         {tab === 'transfer' && (
           <div className="space-y-3">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="bg-white rounded-2xl p-4">
               <MonthNav title={transferTitle} />
 
               {monthlyLoading ? <Spinner /> : monthlyTransferTxs.length === 0 ? (
@@ -1338,13 +1336,13 @@ export default function Charts() {
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">{t('transferOut')}</p>
-                      <p className="text-sm font-semibold truncate text-[#e53935]">
+                      <p className="text-sm font-semibold truncate text-primary">
                         -{symbol} {fmt(transferStats.totalOut)}
                       </p>
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">{t('transferNet')}</p>
-                      <p className={`text-sm font-semibold truncate ${transferStats.net >= 0 ? 'text-gray-800' : 'text-[#e53935]'}`}>
+                      <p className={`text-sm font-semibold truncate ${transferStats.net >= 0 ? 'text-gray-800' : 'text-primary'}`}>
                         {transferStats.net >= 0 ? '+' : '-'}{symbol} {fmt(Math.abs(transferStats.net))}
                       </p>
                     </div>
@@ -1360,7 +1358,7 @@ export default function Charts() {
                   {transferStats.delta !== null && (
                     <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
                       <span className="text-xs text-gray-400">{t('momLabel')}</span>
-                      <span className={`text-sm font-semibold ${transferStats.delta > 0 ? 'text-[#e53935]' : 'text-green-600'}`}>
+                      <span className={`text-sm font-semibold ${transferStats.delta > 0 ? 'text-primary' : 'text-green-600'}`}>
                         {transferStats.delta > 0 ? '+' : ''}{transferStats.delta.toFixed(1)}%
                       </span>
                     </div>

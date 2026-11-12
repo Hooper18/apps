@@ -20,15 +20,17 @@ export default function Layout({ children, hideNav = false }: LayoutProps) {
   const lastSyncedAt = useLastSync(ALL_KEYS)
 
   return (
-    <div className="flex flex-col h-dvh max-w-md mx-auto bg-gray-50 relative overflow-hidden">
+    // h-app：外壳高度走 --app-h（见 index.css），iPhone 主屏幕模式下才能铺满整屏。
+    // has-tabbar：让页面滚动区的 pb-page 自动多让出一个浮动标签栏的高度。
+    <div className={`flex flex-col h-app max-w-md mx-auto bg-gray-50 relative overflow-hidden ${hideNav ? '' : 'has-tabbar'}`}>
       <OfflineBanner
         lastSyncedAt={lastSyncedAt}
         pendingCount={pendingCount}
         syncing={syncing}
         onSync={triggerSync}
       />
-      {/* Page content — leaves room for bottom nav */}
-      <main className="flex-1 overflow-y-auto no-scrollbar">
+      {/* 页面内容铺到屏幕底；标签栏浮在上面，各页滚动区用 pb-page 让出位置 */}
+      <main className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
         {children}
       </main>
 

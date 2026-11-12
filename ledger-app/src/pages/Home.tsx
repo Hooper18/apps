@@ -244,31 +244,37 @@ const { user } = useAuth()
   const txCountLabel = t('txCountSuffix') ? `${filtered.length} ${t('txCountSuffix')}` : String(filtered.length)
 
   return (
-    <div className="anim-page flex flex-col h-full bg-gray-50">
+    <div className="anim-page flex flex-col h-full bg-white">
 
-      {/* ── Header ── */}
-      <div className="text-white px-5 pt-4 pb-16 relative overflow-hidden safe-top"
+      {/* ── Header ──
+          照片铺到状态栏 / 灵动岛后面（HIG：全屏背景要延伸到边缘），
+          文字和按钮用 pt-safe 让到安全区以内。 */}
+      <div className="shrink-0 text-white px-5 pt-safe pb-10 relative overflow-hidden"
         style={{
           backgroundImage: "linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.35)), url('/images/header-bg.jpg')",
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
         }}>
 
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => changeMonth(-1)}
-            className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center active:bg-white/30">
-            <ChevronLeft size={18} />
+        <div className="flex items-center justify-between mb-1.5 -mx-1.5">
+          <button onClick={() => changeMonth(-1)} aria-label={t('prevMonth')}
+            className="w-11 h-11 flex items-center justify-center group">
+            <span className="glass-clear w-9 h-9 rounded-full flex items-center justify-center group-active:bg-white/35 transition-colors">
+              <ChevronLeft size={20} />
+            </span>
           </button>
           <span className="text-base font-semibold">{t('yearMonthFmt', { year, month })}</span>
-          <button onClick={() => changeMonth(1)} disabled={isCurrentMonth}
-            className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center active:bg-white/30 disabled:opacity-30">
-            <ChevronRight size={18} />
+          <button onClick={() => changeMonth(1)} disabled={isCurrentMonth} aria-label={t('nextMonth')}
+            className="w-11 h-11 flex items-center justify-center group disabled:opacity-30">
+            <span className="glass-clear w-9 h-9 rounded-full flex items-center justify-center group-active:bg-white/35 transition-colors">
+              <ChevronRight size={20} />
+            </span>
           </button>
         </div>
 
-        <p className="text-xs text-white/70 mb-1">{t('monthlyExpense')}</p>
+        <p className="text-[13px] leading-[18px] text-white/80 mb-1">{t('monthlyExpense')}</p>
 
-        <div className="flex items-baseline gap-2 mb-4">
+        <div className="flex items-center gap-2.5 mb-4">
           <div className="relative" ref={pickerRef}>
             <button
               onClick={() => {
@@ -278,25 +284,25 @@ const { user } = useAuth()
                 }
                 setShowPicker(v => !v)
               }}
-              className="flex items-center gap-0.5 bg-white/20 hover:bg-white/30 active:bg-white/30 rounded-lg px-2 py-1 transition-colors">
-              <span className="text-base font-semibold">{displayCurrency}</span>
-              <ChevronDown size={13} className={`transition-transform ${showPicker ? 'rotate-180' : ''}`} />
+              className="hit-44 glass-clear flex items-center gap-0.5 h-8 rounded-full pl-3 pr-2 active:bg-white/35 transition-colors">
+              <span className="text-sm font-semibold">{displayCurrency}</span>
+              <ChevronDown size={14} className={`transition-transform ${showPicker ? 'rotate-180' : ''}`} />
             </button>
           </div>
-          <span className="text-4xl font-bold tracking-tight">
+          <span className="font-num text-[40px] leading-[44px] font-bold tracking-tight min-w-0 truncate">
             {ratesLoading ? '…' : fmt(expenseTotal)}
           </span>
         </div>
 
-        <div className="flex gap-8">
-          <div>
-            <p className="text-xs text-white/70 mb-0.5">{t('income')}</p>
-            <p className="text-base font-semibold">{symbol} {fmt(incomeTotal)}</p>
+        <div className="flex gap-6">
+          <div className="min-w-0">
+            <p className="text-[13px] leading-[18px] text-white/80 mb-0.5">{t('income')}</p>
+            <p className="font-num text-base font-semibold truncate">{symbol} {fmt(incomeTotal)}</p>
           </div>
-          <div className="w-px bg-red-400/40" />
-          <div>
-            <p className="text-xs text-white/70 mb-0.5">{t('balance')}</p>
-            <p className={`text-base font-semibold ${balance < 0 ? 'text-white/60' : ''}`}>
+          <div className="w-px bg-white/25" />
+          <div className="min-w-0">
+            <p className="text-[13px] leading-[18px] text-white/80 mb-0.5">{t('balance')}</p>
+            <p className={`font-num text-base font-semibold truncate ${balance < 0 ? 'text-white/70' : ''}`}>
               {symbol} {fmt(balance)}
             </p>
           </div>
@@ -304,9 +310,9 @@ const { user } = useAuth()
 
         {/* Transfer summary — only when present, kept subtle and outside the main 3-column layout */}
         {transferTotal > 0 && (
-          <div className="mt-2 flex items-baseline gap-2 text-xs text-white/70">
+          <div className="mt-2.5 flex items-baseline gap-2 text-[13px] leading-[18px] text-white/80">
             <span>{t('transfer')}</span>
-            <span className="font-medium text-white/90">{symbol} {fmt(transferTotal)}</span>
+            <span className="font-num font-medium text-white">{symbol} {fmt(transferTotal)}</span>
           </div>
         )}
 
@@ -316,16 +322,16 @@ const { user } = useAuth()
           const pct = Math.min((expenseTotal / budgetAmt) * 100, 100)
           const isOver = expenseTotal > budgetAmt
           return (
-            <div className="mt-3 pt-3 border-t border-white/30">
-              <div className="flex justify-between text-xs text-white/70 mb-1.5">
+            <div className="mt-3 pt-3 border-t border-white/25">
+              <div className="flex justify-between text-[13px] leading-[18px] text-white/80 mb-2">
                 <span>{t('monthlyBudget')}</span>
                 <span className={isOver ? 'text-white font-semibold' : ''}>
                   {isOver ? t('overBudget') : t('budgetPctUsed', { pct: Math.round(pct) })}
                 </span>
               </div>
-              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-white/25 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${isOver ? 'bg-white' : 'bg-white/80'}`}
+                  className={`h-full rounded-full transition-all ${isOver ? 'bg-white' : 'bg-white/90'}`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -334,47 +340,53 @@ const { user } = useAuth()
         })()}
       </div>
 
-      {/* ── Transaction list ── */}
-      <div className="flex-1 -mt-8 mx-4 bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col">
+      {/* ── Transaction list ──
+          白色面板盖在照片上、一直铺到屏幕底；标签栏浮在它上面，
+          列表用 pb-page 让出位置，最后一行能滚到标签栏上方。 */}
+      <div className="relative z-10 flex-1 min-h-0 -mt-6 bg-white rounded-t-3xl overflow-hidden flex flex-col">
 
         {/* List header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-          <span className="text-sm font-semibold text-gray-700">{t('billDetail')}</span>
-          <span className="text-xs text-gray-400">{txCountLabel}</span>
+        <div className="flex items-baseline justify-between px-5 pt-4 pb-2 shrink-0">
+          <h2 className="text-lg font-semibold text-gray-900">{t('billDetail')}</h2>
+          <span className="text-[13px] leading-[18px] text-gray-400">{txCountLabel}</span>
         </div>
 
         {/* ── Search bar ── */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-          <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
-            <Search size={14} className="text-gray-400 shrink-0" />
+        <div className="flex items-center gap-2 px-4 pb-2 shrink-0">
+          <div className="flex-1 min-w-0 flex items-center gap-2 bg-gray-50 rounded-full h-10 px-3.5">
+            <Search size={16} className="text-gray-400 shrink-0" />
             <input
               type="text"
               value={keyword}
               onChange={e => setKeyword(e.target.value)}
               placeholder={t('searchPlaceholder')}
-              className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+              className="flex-1 min-w-0 text-base bg-transparent outline-none text-gray-900 placeholder:text-gray-400"
             />
             {keyword && (
-              <button onClick={() => setKeyword('')} className="shrink-0">
-                <X size={13} className="text-gray-400" />
+              <button onClick={() => setKeyword('')} aria-label={t('clearFilter')}
+                className="shrink-0 w-7 h-7 -mr-1.5 flex items-center justify-center">
+                <span className="w-[18px] h-[18px] rounded-full bg-gray-300 flex items-center justify-center">
+                  <X size={11} strokeWidth={3} className="text-white" />
+                </span>
               </button>
             )}
           </div>
           {/* Filter button */}
           <button
             onClick={openFilter}
-            className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-              active ? 'bg-[#e53935] text-white' : 'bg-gray-50 text-gray-500'
+            aria-label={t('filterTitle')}
+            className={`hit-44 w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+              active ? 'bg-primary text-white' : 'bg-gray-50 text-gray-600 active:bg-gray-100'
             }`}
           >
-            <SlidersHorizontal size={16} />
+            <SlidersHorizontal size={17} />
             {isFilterActive(applied) && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#e53935] rounded-full border-2 border-white" />
+              <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-primary rounded-full border-2 border-white" />
             )}
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-page">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -385,7 +397,7 @@ const { user } = useAuth()
               <p className="text-sm">{transactions.length === 0 ? t('noRecords') : t('noFilterResults')}</p>
               {transactions.length === 0
                 ? <p className="text-xs mt-1">{t('noRecordsHint')}</p>
-                : <button onClick={resetFilter} className="text-xs mt-2 text-[#e53935]">{t('clearFilter')}</button>
+                : <button onClick={resetFilter} className="text-sm mt-3 px-3 py-2 text-primary font-medium">{t('clearFilter')}</button>
               }
             </div>
           ) : (
@@ -397,14 +409,14 @@ const { user } = useAuth()
 
               return (
                 <div key={date}>
-                  <div className="flex justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-100">
-                    <span className="text-xs text-gray-500">{formatDateLabel(date)}</span>
+                  <div className="sticky top-0 z-[1] flex justify-between items-baseline px-5 pt-3 pb-1.5 bg-white/95">
+                    <span className="text-[13px] leading-[18px] font-medium text-gray-500">{formatDateLabel(date)}</span>
                     {dayExpense > 0 && (
-                      <span className="text-xs text-red-400">{symbol} {fmt(dayExpense)}</span>
+                      <span className="font-num text-[13px] leading-[18px] text-gray-400">{symbol} {fmt(dayExpense)}</span>
                     )}
                   </div>
 
-                  {dayTxs.map(tx => {
+                  {dayTxs.map((tx, idx) => {
                     const converted = convertTo(tx.amount, tx.currency)
                     const isExpense = tx.type === 'expense'
                     const isIncome  = tx.type === 'income'
@@ -412,31 +424,37 @@ const { user } = useAuth()
                     const origSymbol = CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency
                     // 减号：支出 / 转账"转出"；加号：收入 / 转账"转入"（含老数据 direction=null）
                     const showMinus = isExpense || isTransferOut
+                    const isLast = idx === dayTxs.length - 1
 
                     return (
                       <button key={tx.id}
                         onClick={() => setSelectedTx(tx)}
-                        className="w-full flex items-center px-4 py-3 border-b border-gray-50 active:bg-gray-50 text-left">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl shrink-0 mr-3">
+                        className="w-full flex items-center pl-5 active:bg-gray-50 text-left transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shrink-0 mr-3">
                           {tx.categories?.icon ?? '📦'}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">
-                            {tx.categories?.name ?? t('uncategorized')}
-                          </p>
-                          {tx.description && (
-                            <p className="text-xs text-gray-400 truncate">{tx.description}</p>
-                          )}
-                        </div>
-                        <div className="text-right ml-2 shrink-0">
-                          <p className={`text-sm font-semibold ${
-                            isExpense ? 'text-red-500' : isIncome ? 'text-green-500' : 'text-blue-500'
-                          }`}>
-                            {showMinus ? '-' : '+'}{symbol} {fmt(converted)}
-                          </p>
-                          {tx.currency !== displayCurrency && (
-                            <p className="text-[10px] text-gray-400">{origSymbol} {fmt(tx.amount)}</p>
-                          )}
+                        {/* 分隔线从文字开始（iOS 列表的 inset separator），每组最后一行不画 */}
+                        <div className={`flex-1 min-w-0 flex items-center py-3 pr-5 min-h-[60px] ${isLast ? '' : 'border-b border-gray-100'}`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base text-gray-900 truncate">
+                              {tx.categories?.name ?? t('uncategorized')}
+                            </p>
+                            {tx.description && (
+                              <p className="text-[13px] leading-[18px] text-gray-400 truncate">{tx.description}</p>
+                            )}
+                          </div>
+                          <div className="text-right ml-3 shrink-0">
+                            {/* 支出用正文色，只有收入（绿）和转账（蓝）上色 ——
+                                红色留给强调色和"超支"这类警示，不再同时表示"支出"。 */}
+                            <p className={`font-num text-base font-semibold ${
+                              isExpense ? 'text-gray-900' : isIncome ? 'text-green-600' : 'text-blue-600'
+                            }`}>
+                              {showMinus ? '-' : '+'}{symbol} {fmt(converted)}
+                            </p>
+                            {tx.currency !== displayCurrency && (
+                              <p className="font-num text-xs text-gray-400">{origSymbol} {fmt(tx.amount)}</p>
+                            )}
+                          </div>
                         </div>
                       </button>
                     )
@@ -448,8 +466,6 @@ const { user } = useAuth()
         </div>
 
       </div>
-
-      <div className="h-4 shrink-0" />
 
       {/* Transaction detail sheet */}
       {selectedTx && (
@@ -465,12 +481,12 @@ const { user } = useAuth()
       {showPicker && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowPicker(false)} />
-          <div className="anim-rise-fade fixed z-50 bg-white rounded-xl shadow-xl min-w-[110px]"
+          <div className="anim-rise-fade fixed z-50 bg-white rounded-xl shadow-glass min-w-[128px] py-1"
             style={{ top: pickerPos.top, left: pickerPos.left, maxHeight: '60vh', overflowY: 'auto' }}>
             {DISPLAY_CURRENCIES.map(c => (
               <button key={c} onClick={() => { setDisplayCurrency(c); setShowPicker(false) }}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors ${
-                  c === displayCurrency ? 'text-[#e53935] font-semibold bg-red-50' : 'text-gray-700'
+                className={`w-full flex items-center gap-2 px-4 h-11 text-left text-base active:bg-gray-50 transition-colors ${
+                  c === displayCurrency ? 'text-primary font-semibold' : 'text-gray-900'
                 }`}>
                 <span className="w-7 text-gray-400">{CURRENCY_SYMBOLS[c]}</span>
                 <span>{c}</span>
@@ -485,33 +501,36 @@ const { user } = useAuth()
       {showFilter && createPortal(
         <>
           <div className="anim-fade-in fixed inset-0 bg-black/40 z-40" onClick={() => setShowFilter(false)} />
-          <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-2xl z-50 flex flex-col max-h-[85vh]">
+          <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh]">
             {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1 shrink-0">
-              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            <div className="flex justify-center pt-2 shrink-0">
+              <div className="w-9 h-[5px] bg-gray-300 rounded-full" />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-              <h2 className="text-base font-semibold text-gray-800">{t('filterTitle')}</h2>
-              <button onClick={() => setShowFilter(false)} className="p-1.5 rounded-full hover:bg-gray-100">
-                <X size={18} className="text-gray-500" />
+            <div className="flex items-center justify-between pl-5 pr-3 py-2 shrink-0">
+              <h2 className="text-base font-semibold text-gray-900">{t('filterTitle')}</h2>
+              <button onClick={() => setShowFilter(false)} aria-label={t('close')}
+                className="w-11 h-11 flex items-center justify-center group">
+                <span className="w-[30px] h-[30px] rounded-full bg-gray-50 group-active:bg-gray-200 flex items-center justify-center transition-colors">
+                  <X size={16} strokeWidth={2.4} className="text-gray-500" />
+                </span>
               </button>
             </div>
 
             {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6">
 
               {/* Date range */}
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('filterDateRange')}</p>
+                <p className="text-[13px] leading-[18px] font-medium text-gray-500 mb-2">{t('filterDateRange')}</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
                     value={draft.dateFrom}
                     max={draft.dateTo || undefined}
                     onChange={e => setDraft(p => ({ ...p, dateFrom: e.target.value }))}
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-[#e53935] transition-colors"
+                    className="flex-1 min-w-0 px-3 h-11 bg-gray-50 border border-transparent rounded-xl text-base outline-none focus:border-primary/40 transition-colors"
                   />
                   <span className="text-gray-400 text-sm shrink-0">{t('filterTo')}</span>
                   <input
@@ -519,21 +538,21 @@ const { user } = useAuth()
                     value={draft.dateTo}
                     min={draft.dateFrom || undefined}
                     onChange={e => setDraft(p => ({ ...p, dateTo: e.target.value }))}
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-[#e53935] transition-colors"
+                    className="flex-1 min-w-0 px-3 h-11 bg-gray-50 border border-transparent rounded-xl text-base outline-none focus:border-primary/40 transition-colors"
                   />
                 </div>
               </div>
 
               {/* Type */}
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('filterType')}</p>
+                <p className="text-[13px] leading-[18px] font-medium text-gray-500 mb-2">{t('filterType')}</p>
                 <div className="flex gap-2">
                   {TX_TYPES.map(({ value, label }) => {
                     const on = draft.types.has(value)
                     return (
                       <button key={value} onClick={() => toggleDraftType(value)}
-                        className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                          on ? 'bg-[#e53935] border-[#e53935] text-white' : 'bg-white border-gray-200 text-gray-500'
+                        className={`flex-1 h-11 rounded-xl text-sm font-medium transition-colors ${
+                          on ? 'bg-primary text-white' : 'bg-gray-50 text-gray-700 active:bg-gray-100'
                         }`}>
                         {label}
                       </button>
@@ -545,20 +564,20 @@ const { user } = useAuth()
               {/* Category */}
               {uniqueCats.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t('filterCategory')}</p>
+                  <p className="text-[13px] leading-[18px] font-medium text-gray-500 mb-2">{t('filterCategory')}</p>
                   <div className="grid grid-cols-5 gap-1">
                     {uniqueCats.map(cat => {
                       const on = draft.categoryIds.has(cat.id)
                       return (
                         <button key={cat.id} onClick={() => toggleDraftCat(cat.id)}
-                          className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-colors ${on ? 'bg-red-50' : ''}`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors ${
-                            on ? 'bg-[#e53935]' : 'bg-gray-100'
+                          className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl">
+                          <div className={`w-11 h-11 rounded-full flex items-center justify-center text-lg transition-colors ${
+                            on ? 'bg-primary/10 ring-2 ring-primary' : 'bg-gray-50'
                           }`}>
                             {cat.icon}
                           </div>
-                          <span className={`text-[10px] leading-tight text-center break-all ${
-                            on ? 'text-[#e53935] font-semibold' : 'text-gray-500'
+                          <span className={`text-[11px] leading-tight text-center break-all ${
+                            on ? 'text-primary font-semibold' : 'text-gray-500'
                           }`}>
                             {cat.name}
                           </span>
@@ -571,13 +590,13 @@ const { user } = useAuth()
             </div>
 
             {/* Action buttons */}
-            <div className="shrink-0 border-t border-gray-100 px-4 pt-3 pb-8 flex gap-3">
+            <div className="shrink-0 px-5 pt-3 pb-safe-4 flex gap-3">
               <button onClick={resetFilter}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold active:bg-gray-200 transition-colors">
+                className="flex-1 h-[50px] bg-gray-50 text-gray-900 rounded-xl text-base font-semibold active:bg-gray-200 transition-colors">
                 {t('filterReset')}
               </button>
               <button onClick={confirmFilter}
-                className="flex-1 py-3 bg-[#e53935] text-white rounded-xl text-sm font-semibold active:opacity-90 transition-opacity">
+                className="flex-1 h-[50px] bg-primary text-white rounded-xl text-base font-semibold active:bg-primary-dark transition-colors">
                 {t('filterConfirm')}
               </button>
             </div>

@@ -22,6 +22,12 @@
        用屏幕高度写一个像素值兜底。 */
     --app-h: 100vh;
 
+    /* fixed 弹层的"真正的屏幕底"。上面那个 bug 同样影响 fixed 元素的包含块：
+       bottom:0 会停在离屏幕底一截状态栏高度的地方，下面露出后面的页面。
+       100% 在 bottom 里按包含块高度解析，减掉外壳高度正好是差的那一截（负值，往下补）；
+       没有那个 bug 时两者相等，结果是 0。fixed 元素贴底一律用它，不要写 bottom-0 / inset-0。 */
+    --fixed-bottom: calc(100% - var(--app-h));
+
     /* 浮动标签栏的尺寸，以及"页面滚动区底部要让出多少"。 */
     --tabbar-h: 58px;
     --tabbar-bottom: max(12px, calc(var(--sab) - 10px));
@@ -114,6 +120,10 @@
 
   .h-app     { height: var(--app-h); }
   .min-h-app { min-height: var(--app-h); }
+
+  /* fixed 弹层用：贴到真正的屏幕底 / 铺满整屏（见 :root 里的 --fixed-bottom）。 */
+  .bottom-app { bottom: var(--fixed-bottom); }
+  .inset-app  { top: 0; right: 0; left: 0; bottom: var(--fixed-bottom); }
 
   .pt-safe   { padding-top: var(--sat); }
   .pt-safe-2 { padding-top: calc(var(--sat) + 0.5rem); }

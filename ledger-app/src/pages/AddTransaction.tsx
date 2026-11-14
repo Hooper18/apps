@@ -423,7 +423,7 @@ export default function AddTransaction() {
       {/* Currency picker dropdown — rendered via portal so it isn't clipped by parent overflow-hidden */}
       {showCurrencyPicker && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowCPicker(false)} />
+          <div className="fixed inset-app z-40" onClick={() => setShowCPicker(false)} />
           {/* 外层只负责定位（transform 向上翻），内层才做入场动画 —— 动画也用 transform，放同一层会互相覆盖 */}
           <div className="z-50" style={pickerStyle}>
             <div className="anim-rise-fade bg-white rounded-xl shadow-glass overflow-y-auto py-1 max-h-[224px]">
@@ -443,7 +443,7 @@ export default function AddTransaction() {
 
       {toast && (
         <div className="anim-toast fixed left-1/2 bg-black/80 text-white px-5 py-2.5 rounded-full text-sm whitespace-nowrap z-50 pointer-events-none"
-          style={{ bottom: 'calc(var(--sab) + 40px)' }}>
+          style={{ bottom: 'calc(var(--fixed-bottom) + var(--sab) + 40px)' }}>
           {toast}
         </div>
       )}

@@ -429,8 +429,8 @@ export default function Settings() {
       {/* Bottom sheet (currency picker + language picker) */}
       {modal && (
         <>
-          <div className="anim-fade-in fixed inset-0 bg-black/40 z-40" onClick={() => !(saving || pwdLoading || exportLoading) && setModal(null)} />
-          <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[75vh]">
+          <div className="anim-fade-in fixed inset-app bg-black/40 z-40" onClick={() => !(saving || pwdLoading || exportLoading) && setModal(null)} />
+          <div className="anim-slide-up fixed bottom-app left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[75vh]">
 
             {/* Handle */}
             <div className="flex justify-center pt-2 shrink-0">

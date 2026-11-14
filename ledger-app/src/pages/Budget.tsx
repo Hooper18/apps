@@ -335,9 +335,9 @@ export default function Budget() {
       {/* ── Edit budget sheet ── */}
       {editing !== null && createPortal(
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => !saving && setEditing(null)} />
+          <div className="fixed inset-app bg-black/40 z-40" onClick={() => !saving && setEditing(null)} />
           <div
-            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50"
+            className="fixed bottom-app left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50"
             style={{ animation: 'slideUp .22s ease' }}
           >
             <div className="flex justify-center pt-2">

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { collectViewportDiag, type DiagRow } from '../lib/viewport'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { Lang } from '../lib/i18n'
 import { PageShell } from '../components/layout/StatusBand'
@@ -31,10 +33,45 @@ export default function About() {
       <div className="flex-1 min-h-0 px-4 pb-safe-4">
         <div className="bg-white rounded-2xl h-full overflow-y-auto no-scrollbar p-5">
           {lang === 'zh' ? <ZhContent /> : <EnContent />}
+          <ViewportDiag />
         </div>
       </div>
     </div>
     </PageShell>
+  )
+}
+
+/**
+ * 真机排查用的诊断信息：视口 / 屏幕 / 安全区 / 外壳高度。
+ * 手机上没有开发者工具，布局出问题时让用户展开这一段截图，就能看出是哪个值不对
+ * （2026-11-14 标签栏掉出屏幕那次，就是因为看不到这些数只能靠量截图推）。
+ */
+function ViewportDiag() {
+  const { t } = useLanguage()
+  const [rows, setRows] = useState<DiagRow[] | null>(null)
+
+  return (
+    <div className="mt-6 pt-4 border-t border-gray-100">
+      <button
+        onClick={() => setRows(rows ? null : collectViewportDiag())}
+        className="h-11 -ml-1 px-1 text-[13px] leading-[18px] text-gray-400 active:text-gray-600 transition-colors"
+      >
+        {rows ? t('diagHide') : t('diagShow')}
+      </button>
+      {rows && (
+        <div className="mt-1">
+          <p className="text-[13px] leading-[18px] text-gray-400 mb-2">{t('diagHint')}</p>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs text-gray-500">
+            {rows.map((r) => (
+              <div key={r.label} className="flex justify-between gap-2 min-w-0">
+                <dt className="shrink-0 text-gray-400">{r.label}</dt>
+                <dd className="truncate text-gray-700">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
   )
 }
 

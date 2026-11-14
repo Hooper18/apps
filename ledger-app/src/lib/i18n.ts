@@ -240,6 +240,9 @@ const zh = {
 
   // About page
   aboutPageTitle: '关于本应用',
+  diagShow: '显示诊断信息',
+  diagHide: '收起诊断信息',
+  diagHint: '界面显示不正常时，把这一段截图发给开发者。',
   backAriaLabel: '返回',
   close: '关闭',
   prevMonth: '上个月',
@@ -513,6 +516,9 @@ const en: typeof zh = {
   forgotSendFailed: 'Failed to send, please try again',
 
   aboutPageTitle: 'About',
+  diagShow: 'Show diagnostics',
+  diagHide: 'Hide diagnostics',
+  diagHint: 'If the layout looks wrong, send a screenshot of this section to the developer.',
   backAriaLabel: 'Back',
   close: 'Close',
   prevMonth: 'Previous month',

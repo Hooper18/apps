@@ -55,10 +55,10 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
   return createPortal(
     <>
       {/* Backdrop */}
-      <div className="anim-fade-in fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="anim-fade-in fixed inset-app bg-black/40 z-40" onClick={onClose} />
 
       {/* Sheet — flex column with max height so buttons never go off-screen */}
-      <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh]">
+      <div className="anim-slide-up fixed bottom-app left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh]">
         {/* ── Sticky top: handle + header ── */}
         <div className="shrink-0 bg-white rounded-t-3xl">
           {/* Handle */}
@@ -132,8 +132,8 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
       {/* Delete confirm — z-[100] ensures it renders above the sheet (z-50) */}
       {confirmDelete && (
         <>
-          <div className="anim-fade-in fixed inset-0 bg-black/50 z-[100]" />
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-8">
+          <div className="anim-fade-in fixed inset-app bg-black/50 z-[100]" />
+          <div className="fixed inset-app z-[100] flex items-center justify-center px-8">
             <div className="anim-rise-fade bg-white rounded-3xl p-5 pt-6 w-full max-w-[300px] text-center shadow-glass">
               <h3 className="text-base font-semibold text-gray-900 mb-1">{t('confirmDelete')}</h3>
               <p className="text-sm text-gray-500 mb-5">{t('confirmDeleteMsg')}</p>

@@ -480,7 +480,7 @@ const { user } = useAuth()
       {/* ── Currency picker portal ── */}
       {showPicker && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowPicker(false)} />
+          <div className="fixed inset-app z-40" onClick={() => setShowPicker(false)} />
           <div className="anim-rise-fade fixed z-50 bg-white rounded-xl shadow-glass min-w-[128px] py-1"
             style={{ top: pickerPos.top, left: pickerPos.left, maxHeight: '60vh', overflowY: 'auto' }}>
             {DISPLAY_CURRENCIES.map(c => (
@@ -500,8 +500,8 @@ const { user } = useAuth()
       {/* ── Filter panel (bottom sheet via portal) ── */}
       {showFilter && createPortal(
         <>
-          <div className="anim-fade-in fixed inset-0 bg-black/40 z-40" onClick={() => setShowFilter(false)} />
-          <div className="anim-slide-up fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh]">
+          <div className="anim-fade-in fixed inset-app bg-black/40 z-40" onClick={() => setShowFilter(false)} />
+          <div className="anim-slide-up fixed bottom-app left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl z-50 flex flex-col max-h-[85vh]">
             {/* Handle */}
             <div className="flex justify-center pt-2 shrink-0">
               <div className="w-9 h-[5px] bg-gray-300 rounded-full" />

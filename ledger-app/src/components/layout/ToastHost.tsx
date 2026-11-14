@@ -39,7 +39,7 @@ export default function ToastHost() {
       style={{
         animationDuration: `${duration}ms`,
         transform: 'translateX(-50%)',
-        bottom: 'calc(var(--sab) + 96px)',
+        bottom: 'calc(var(--fixed-bottom) + var(--sab) + 96px)',
       }}
       className="anim-toast fixed left-1/2 bg-black/85 text-white px-4 py-3 rounded-2xl text-sm leading-snug z-50 pointer-events-auto max-w-[85vw] break-words text-center cursor-pointer"
     >

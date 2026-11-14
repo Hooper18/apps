@@ -125,7 +125,10 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 
 ### 外壳高度
 - 一律用 `h-app`（= `var(--app-h)`），**不要再写 `h-dvh` / `h-screen` / `min-h-screen`**。
-- 原因：iPhone 把站点加到主屏幕后，`viewport-fit=cover` 下 `100%` / `dvh` / `svh` 会比屏幕矮一截安全区（WebKit bug 254868），底部露出一条 body 背景。`index.css` 里 standalone 用 `100vh`，`src/lib/viewport.ts` 在 iPhone standalone 下再用 `screen.height` 写死像素兜底。
+- 原因：iPhone 把站点加到主屏幕后，`viewport-fit=cover` 下 `100%` / `dvh` / `svh` 会比屏幕矮一截安全区（WebKit bug 254868），底部露出一条 body 背景。`index.css` 里 standalone 用 `100vh`，`src/lib/viewport.ts` 在 iPhone standalone 下再按「视口宽度 × 屏幕长宽比」算一个像素值兜底。
+- **`screen.width` / `screen.height` 是设备点，不能直接当 CSS 像素用**：用户手机上网页有约 1.15 倍缩放，两者不相等。2026-11-14 就是把 `screen.height`（956）直接写进 `--app-h`，外壳比屏幕高 122px，贴底的标签栏整条掉到屏幕外。要用屏幕尺寸只能用比例。
+- fixed 定位的弹层贴底 / 铺满用 `bottom-app` / `inset-app`（= `--fixed-bottom`），**不要写 `bottom-0` / `inset-0`**：那个 bug 下 fixed 的包含块同样比屏幕矮一截。需要自己算 bottom 的（toast）在 `calc()` 里加上 `var(--fixed-bottom)`。
+- 真机排查：设置 → 关于 → 最下面「显示诊断信息」（`collectViewportDiag`），让用户截图。
 - 不走 Layout 的页面（Auth / ResetPassword / About）用 `PageShell` 包住，里面自己写 `h-full overflow-y-auto`（html/body 是 `overflow:hidden`，页面得自己能滚）。
 
 ### 安全区
@@ -134,7 +137,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
   - 底部：`pb-safe-2/4/6`（有 Home 指示条就让出指示条，没有就用最小值）
   - 有标签栏的页面，滚动区底部用 `pb-page`（Layout 上的 `has-tabbar` 会让它自动多让出标签栏高度）
 - 这些类自带 padding，别和同方向的 `pt-*` / `pb-*` 写在同一个元素上。旧的 `.safe-top` 就是因为写在 `@layer base`、被同元素的 `pt-4` 盖掉，一直没生效。
-- 目标机型：用户的 iPhone 17 Pro Max（440×956pt，竖屏安全区顶 62 / 底 34）。本地预览时把视口设成 440×956，再手动 `--sat: 62px`、`--sab: 34px` 模拟。
+- 目标机型：用户的 iPhone 17 Pro Max（屏幕 440×956pt，竖屏安全区顶 62 / 底 34）。但**网页实际的 CSS 视口约 384×834**（有约 1.15 倍缩放，2026-11-14 量截图得出；缩放来源未证实）。本地预览时把视口设成 **384×834**，再手动 `--sat: 62px`、`--sab: 34px` 模拟。真机尺寸别照机型参数表推，先量截图里固定尺寸的元素（比如 40px 的图标圆）换算。
 
 ### 状态栏底（`components/layout/StatusBand.tsx`）
 - `black-translucent` 模式下状态栏文字的颜色不归页面管：用户手机上同一天出现过白字和黑字，浅色页面配白字时完全看不见。

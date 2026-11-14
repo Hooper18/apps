@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
@@ -11,6 +12,8 @@ import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from '../types'
 import type { Currency, TxDetail, TransactionType } from '../types'
 import type { TranslationKey } from '../lib/i18n'
 import TransactionSheet from '../components/TransactionSheet'
+import SwipeRow from '../components/SwipeRow'
+import DeleteTxDialog from '../components/DeleteTxDialog'
 
 const DISPLAY_CURRENCIES = SUPPORTED_CURRENCIES
 const LS_KEY = 'ledger_display_currency'
@@ -37,6 +40,7 @@ export default function Home() {
 const { user } = useAuth()
   const { baseCurrency, rates, ratesLoading } = useCurrency()
   const { t, lang } = useLanguage()
+  const navigate = useNavigate()
 
   const TX_TYPES: { value: TransactionType; label: string }[] = [
     { value: 'expense',  label: t('expense') },
@@ -94,10 +98,11 @@ const { user } = useAuth()
     if (m > 12) { m = 1;  y++ }
     if (m < 1)  { m = 12; y-- }
     setMonth(m); setYear(y)
+    setSwipedId(null)
   }
 
   // ── 数据来自 hooks（全量缓存，月份切换在客户端过滤） ──
-  const { transactions: allTxs, loading: txLoading } = useTransactions()
+  const { transactions: allTxs, loading: txLoading, remove: removeTx } = useTransactions()
   const { categories } = useCategories()
 
   const transactions: TxDetail[] = useMemo(() => {
@@ -129,6 +134,12 @@ const { user } = useAuth()
 
   // ── selected transaction sheet ──
   const [selectedTx, setSelectedTx] = useState<TxDetail | null>(null)
+
+  // ── 左滑操作 ──
+  // 同一时间只滑开一行；滚动列表、切月份时收回。
+  const [swipedId, setSwipedId] = useState<string | null>(null)
+  // 左滑点了「删除」、正在等确认的那一条
+  const [deletingTx, setDeletingTx] = useState<TxDetail | null>(null)
 
   // hook 删除已经更新了全局 state，这里保留 noop 让 TransactionSheet 接口不变。
   function handleDeleted(_id: string) {
@@ -386,7 +397,8 @@ const { user } = useAuth()
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pb-page">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-page"
+          onScroll={() => { if (swipedId !== null) setSwipedId(null) }}>
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -427,7 +439,15 @@ const { user } = useAuth()
                     const isLast = idx === dayTxs.length - 1
 
                     return (
-                      <button key={tx.id}
+                      // 左滑露出「编辑 / 删除」（iOS 列表的 swipe actions）；轻点仍然打开详情
+                      <SwipeRow key={tx.id}
+                        open={swipedId === tx.id}
+                        onOpenChange={(o) => setSwipedId((cur) => (o ? tx.id : cur === tx.id ? null : cur))}
+                        actions={[
+                          { key: 'edit', label: t('edit'), tone: 'neutral', onClick: () => navigate('/add', { state: { tx } }) },
+                          { key: 'delete', label: t('delete'), tone: 'danger', onClick: () => setDeletingTx(tx) },
+                        ]}>
+                      <button
                         onClick={() => setSelectedTx(tx)}
                         className="w-full flex items-center pl-5 active:bg-gray-50 text-left transition-colors">
                         <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shrink-0 mr-3">
@@ -457,6 +477,7 @@ const { user } = useAuth()
                           </div>
                         </div>
                       </button>
+                      </SwipeRow>
                     )
                   })}
                 </div>
@@ -474,6 +495,16 @@ const { user } = useAuth()
           displayCurrency={displayCurrency}
           onClose={() => setSelectedTx(null)}
           onDeleted={handleDeleted}
+          onRemove={removeTx}
+        />
+      )}
+
+      {/* 左滑「删除」的确认框 */}
+      {deletingTx && (
+        <DeleteTxDialog
+          onConfirm={() => removeTx(deletingTx.id)}
+          onCancel={() => setDeletingTx(null)}
+          onDone={() => setDeletingTx(null)}
         />
       )}
 

@@ -151,6 +151,13 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - `BottomNav` 是浮在内容上方的玻璃胶囊（absolute 定位在 Layout 里），只放 4 个导航项；「记一笔」是胶囊右边独立的圆按钮（HIG：标签栏只做导航、不放操作）。
 - 页面内容铺到屏幕底，从标签栏下面滑过去；新页面的滚动容器记得加 `pb-page`。
 
+### 流水行左滑（`components/SwipeRow.tsx`，2026-11-14 加）
+- 首页流水行、日历当日明细的行可以往左滑，露出「编辑」（灰）和「删除」（红）两个按钮；轻点行仍然打开详情弹层。
+- 手势的数（方向判定、跟手距离、松手停哪）在 `lib/swipe.ts`，是纯函数；`SwipeRow` 只接指针事件。行内容容器带 `touch-action: pan-y`，竖向滚动仍归浏览器。
+- 开合状态放页面里（`swipedId`），同一时间只滑开一行；列表 `onScroll`、切月份时收回。新列表要接左滑照这个写。
+- 行与行之间的分隔线如果用了 `last:border-0`，要写在 `SwipeRow` 的 `className` 上，不能写在里面的 button 上（button 现在各自包了一层，永远是 last-child）。
+- **删除一律用页面自己那份 `useTransactions().remove`**（传给 `DeleteTxDialog` 的 `onConfirm` / `TransactionSheet` 的 `onRemove`）。每个 `useTransactions()` 各有一份列表状态，用别的实例删，页面列表要等联网同步回来才更新，离线时那一行一直不消失。
+
 ### 设计变量（`tailwind.config.js`）
 - 灰阶 = iOS 系统灰：`gray-50` 页面底色 / 填充，`gray-100` 分隔线，`gray-300` 箭头，`gray-400` 起才能当文字（对比度 ≥ 4.5:1），`gray-900` 正文。
 - 字号映射到 HIG 文本样式：`text-xs` 12、`text-sm` 15、`text-base` 17、`text-lg` 20、`text-xl` 22；页面大标题 `text-[28px] leading-[34px] font-bold`；最小 11px。输入框一律 `text-base`。

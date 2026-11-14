@@ -7,21 +7,27 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useTransactions } from '../hooks/useTransactions'
 import { CURRENCY_SYMBOLS } from '../types'
 import type { TxDetail, Currency } from '../types'
+import DeleteTxDialog from './DeleteTxDialog'
 
 interface Props {
   tx: TxDetail
   displayCurrency: Currency
   onClose: () => void
   onDeleted: (id: string) => void
+  /**
+   * 执行删除。页面应该传自己那份 useTransactions().remove，列表才会立刻少一行
+   * （原因见 DeleteTxDialog）。不传就用弹层自己的那份。
+   */
+  onRemove?: (id: string) => Promise<unknown>
 }
 
-export default function TransactionSheet({ tx, displayCurrency, onClose, onDeleted }: Props) {
+export default function TransactionSheet({ tx, displayCurrency, onClose, onDeleted, onRemove }: Props) {
   const navigate = useNavigate()
   const { rates } = useCurrency()
   const { t } = useLanguage()
-  const { remove: removeTx } = useTransactions()
+  const { remove: ownRemove } = useTransactions()
+  const removeTx = onRemove ?? ownRemove
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   function convertTo(amount: number, from: string): number {
     if (from === displayCurrency) return amount
@@ -43,14 +49,6 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
   const transferPrefix = isTransferOut ? '-' : '+'
 
   const typeLabel = tx.type === 'expense' ? t('expense') : tx.type === 'income' ? t('income') : t('transfer')
-
-  async function handleDelete() {
-    setDeleting(true)
-    await removeTx(tx.id)
-    setDeleting(false)
-    onDeleted(tx.id)
-    onClose()
-  }
 
   return createPortal(
     <>
@@ -129,32 +127,13 @@ export default function TransactionSheet({ tx, displayCurrency, onClose, onDelet
         </div>
       </div>
 
-      {/* Delete confirm — z-[100] ensures it renders above the sheet (z-50) */}
+      {/* 确认删除：和列表行左滑的「删除」共用同一个确认框 */}
       {confirmDelete && (
-        <>
-          <div className="anim-fade-in fixed inset-app bg-black/50 z-[100]" />
-          <div className="fixed inset-app z-[100] flex items-center justify-center px-8">
-            <div className="anim-rise-fade bg-white rounded-3xl p-5 pt-6 w-full max-w-[300px] text-center shadow-glass">
-              <h3 className="text-base font-semibold text-gray-900 mb-1">{t('confirmDelete')}</h3>
-              <p className="text-sm text-gray-500 mb-5">{t('confirmDeleteMsg')}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="flex-1 h-11 bg-gray-50 text-gray-900 rounded-full text-base font-semibold active:bg-gray-200 transition-colors"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="flex-1 h-11 bg-red-600 text-white rounded-full text-base font-semibold active:opacity-90 disabled:opacity-50"
-                >
-                  {deleting ? t('deleting') : t('confirmDelete')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
+        <DeleteTxDialog
+          onConfirm={() => removeTx(tx.id)}
+          onCancel={() => setConfirmDelete(false)}
+          onDone={() => { onDeleted(tx.id); onClose() }}
+        />
       )}
     </>,
     document.body,

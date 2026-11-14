@@ -142,6 +142,28 @@ describe('TransactionSheet', () => {
     expect(removeMock).not.toHaveBeenCalled()
   })
 
+  it('deletes through the page-provided onRemove when given (so the page list updates at once)', async () => {
+    const onRemove = vi.fn(() => Promise.resolve({ error: null }))
+    const onClose = vi.fn()
+    render(
+      <MemoryRouter>
+        <TransactionSheet
+          tx={baseTx}
+          displayCurrency="CNY"
+          onClose={onClose}
+          onDeleted={() => {}}
+          onRemove={onRemove}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/ }))
+    const confirmBtns = screen.getAllByRole('button', { name: /confirmDelete/ })
+    fireEvent.click(confirmBtns[confirmBtns.length - 1])
+    await waitFor(() => expect(onRemove).toHaveBeenCalledWith('tx-1'))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(removeMock).not.toHaveBeenCalled()
+  })
+
   it("uncategorized fallback shows 'uncategorized' label", () => {
     renderSheet({ categories: null })
     expect(screen.getByText('uncategorized')).toBeInTheDocument()

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -8,6 +9,8 @@ import { CURRENCY_SYMBOLS } from '../types'
 import type { Currency, TxDetail } from '../types'
 import type { TranslationKey } from '../lib/i18n'
 import TransactionSheet from '../components/TransactionSheet'
+import SwipeRow from '../components/SwipeRow'
+import DeleteTxDialog from '../components/DeleteTxDialog'
 
 function localDateStr(d: Date = new Date()): string {
   const y = d.getFullYear()
@@ -33,7 +36,7 @@ function pad2(n: number) { return String(n).padStart(2, '0') }
 export default function Calendar() {
   const { baseCurrency, rates } = useCurrency()
   const { t } = useLanguage()
-  const { transactions: allTxs, loading: txLoading } = useTransactions()
+  const { transactions: allTxs, loading: txLoading, remove: removeTx } = useTransactions()
   const { categories } = useCategories()
 
   const displayCurrency = (localStorage.getItem(LS_KEY) as Currency) ?? 'CNY'
@@ -119,6 +122,11 @@ export default function Calendar() {
   function handleDeleted(_id: string) {
     /* useTransactions().remove 已经更新本地状态，TransactionSheet 自己会关 */
   }
+
+  // ── 左滑操作（和首页流水行一致）──
+  const navigate = useNavigate()
+  const [swipedId, setSwipedId] = useState<string | null>(null)
+  const [deletingTx, setDeletingTx] = useState<TxDetail | null>(null)
 
   const todayStr = localDateStr(now)
   const calDays  = buildCalendarDays(year, month)
@@ -230,7 +238,8 @@ export default function Calendar() {
       </div>
 
       {/* ── Day detail (scrollable, takes remaining height) ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-1 pb-page">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-1 pb-page"
+        onScroll={() => { if (swipedId !== null) setSwipedId(null) }}>
         {selectedDate && (
           <div className="bg-white rounded-2xl overflow-hidden">
             {/* Header */}
@@ -271,9 +280,18 @@ export default function Calendar() {
                 const showMinus = isExpense || isTransferOut
                 const origSymbol = CURRENCY_SYMBOLS[tx.currency as Currency] ?? tx.currency
                 return (
-                  <button key={tx.id}
+                  // 分隔线画在 SwipeRow 上：行按钮现在各自包在一层里，last: 得作用在这一层
+                  <SwipeRow key={tx.id}
+                    className="border-b border-gray-100 last:border-0"
+                    open={swipedId === tx.id}
+                    onOpenChange={(o) => setSwipedId((cur) => (o ? tx.id : cur === tx.id ? null : cur))}
+                    actions={[
+                      { key: 'edit', label: t('edit'), tone: 'neutral', onClick: () => navigate('/add', { state: { tx } }) },
+                      { key: 'delete', label: t('delete'), tone: 'danger', onClick: () => setDeletingTx(tx) },
+                    ]}>
+                  <button
                     onClick={() => setSelectedTx(tx)}
-                    className="w-full flex items-center px-4 py-3 min-h-[60px] border-b border-gray-100 last:border-0 active:bg-gray-50 text-left transition-colors">
+                    className="w-full flex items-center px-4 py-3 min-h-[60px] active:bg-gray-50 text-left transition-colors">
                     <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shrink-0 mr-3">
                       {tx.categories?.icon ?? '📦'}
                     </div>
@@ -296,12 +314,22 @@ export default function Calendar() {
                       )}
                     </div>
                   </button>
+                  </SwipeRow>
                 )
               })
             )}
           </div>
         )}
       </div>
+
+      {/* 左滑「删除」的确认框 */}
+      {deletingTx && (
+        <DeleteTxDialog
+          onConfirm={() => removeTx(deletingTx.id)}
+          onCancel={() => setDeletingTx(null)}
+          onDone={() => setDeletingTx(null)}
+        />
+      )}
 
       {/* Transaction detail sheet — edit / delete */}
       {selectedTx && (
@@ -310,6 +338,7 @@ export default function Calendar() {
           displayCurrency={displayCurrency}
           onClose={() => setSelectedTx(null)}
           onDeleted={handleDeleted}
+          onRemove={removeTx}
         />
       )}
     </div>

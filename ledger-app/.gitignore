@@ -42,3 +42,6 @@ playwright/.cache/
 .vitest-cache/
 coverage/
 
+
+# Supabase CLI 的本机状态
+supabase/.temp/

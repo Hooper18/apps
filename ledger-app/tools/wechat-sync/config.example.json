@@ -1,0 +1,7 @@
+{
+  "db_path": "D:/path/to/xwechat_files/<你的账号目录>/db_storage/message/biz_message_0.db",
+  "keys_path": "D:/path/to/all_keys.json",
+  "key_name": "message\\biz_message_0.db",
+  "endpoint": "https://<project-ref>.supabase.co/functions/v1/ingest",
+  "token": "lgr_在 App 的 设置 → 自动记账 里生成"
+}

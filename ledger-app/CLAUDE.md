@@ -18,7 +18,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 | 移动打包 | Capacitor 6（Android） |
 | 通知 | @capacitor/local-notifications 6 |
 
-## 数据库（4 张表）
+## 数据库（4 张表 + 自动记账的 2 张）
 
 以 `src/lib/database.types.ts` 为权威。
 
@@ -171,6 +171,31 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - 记账页金额 span 必须带 `text-3xl` 类名（`AddTransaction.test.tsx` 靠它找）。
 - Segmented 每一段是普通 `<button>`、文字直接放在 button 里（测试按 `getByRole('button', { name })` / `getByText` 定位）。
 - 弹层关闭按钮的 aria-label 用 `t('close')`，不要用 `t('cancel')`（和删除确认框的「取消」撞名）。
+
+## 自动记账（2026-11-15 加，**后端还没上线**）
+
+用法和上线步骤见 `自动记账说明.md`，设计见仓库根 `docs/superpowers/specs/2026-11-15-ledger-auto-ingest-design.md`。这里只记写代码时要守的约定。
+
+### 数据
+- `003_auto_ingest.sql`：`transactions` 多四列 `source` / `external_id` / `merchant` / `needs_review`；新表 `merchant_rules`（商户 → 类目）、`ingest_tokens`（个人令牌，只存 SHA-256）。**先跑 003 再上线客户端。**
+- 手记的流水 `source` 为 NULL。客户端只在编辑**自动流水**时才往 update 里带 `needs_review`（它们存在就说明 003 跑过了），手记流水不带，道理同 `direction`。
+- `merchant_rules` 没有 `id` 列，主键是 `(user_id, merchant_key)`，只能用 outbox 的 `upsert`，不能用按 id 的 update / delete。
+
+### 后端入口 `supabase/functions/ingest/`
+- `logic.ts` 纯函数、**不能有 import**；`handler.ts` 只 import `./logic.ts`，数据库走注入的 `Db` 接口；`index.ts` 是 Deno 入口。前两个用 vitest 测（`vitest.config.ts` 的 include 已包含 `supabase/functions/**/*.test.ts`），`index.ts` 本地跑不了。
+- 部署必须 `--no-verify-jwt`，鉴权靠个人令牌（`Authorization: Bearer lgr_…` 或 `x-ledger-token`）。
+- 选类目的顺序：商户记忆 → 请求里带的类目名 → 「其它」并标 `needs_review`。
+- 去重靠 `(user_id, source, external_id)`：先查后插，唯一索引兜底（它是部分索引，PostgREST 的 upsert 用不了）。
+- **`merchantKey` 有两份**：`supabase/functions/ingest/logic.ts` 和 `src/lib/merchantRules.ts`，必须保持一致（去首尾空格、合并空白、转大写），否则客户端记了后端查不到。`sha256Hex` / `hashToken` 同理。
+
+### 客户端
+- `components/AutoTag.tsx`：流水行类目名旁的「自动」/「待分类」标记，首页和日历都用。新列表要显示自动流水照这个接。
+- `pages/AutoIngest.tsx`（`/auto-ingest`，设置 → 自动记账）：令牌的生成 / 列表 / 撤销，直接调 supabase，不走离线队列。
+- `AddTransaction` 保存自动流水时：清 `needs_review`，支出类再调 `rememberMerchant` 记住商户归类。
+
+### 电脑同步工具 `tools/wechat-sync/`
+- Python，自带 `.venv`，测试 `python -m unittest discover -s tests -t .`。说明见那里的 `README.md`。
+- **仓库是公开的**：`config.json`（本机路径、令牌）已 gitignore；代码、测试样例、文档里不能出现真实的 wxid、路径、密钥、令牌、未脱敏的聊天内容。
 
 ## 全局 Toast
 - `src/lib/toast.ts`：window event bus（`ledger:toast`），导出 `showToast(message, { durationMs? })` / `subscribeToast(cb)`。

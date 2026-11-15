@@ -9,6 +9,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
 import { useCategorySort } from '../hooks/useCategorySort'
+import { rememberMerchant } from '../lib/merchantRules'
 import type { TransactionType, Currency, TxDetail } from '../types'
 import {
   EXPENSE_CATEGORIES,
@@ -48,6 +49,8 @@ export default function AddTransaction() {
 
   // Edit mode: location.state.tx is set when navigating from TransactionSheet
   const editTx = (location.state as { tx?: TxDetail } | null)?.tx
+  // 这条流水是自动入账的（电脑同步 / 快捷指令写进来的），不是手记的
+  const isAutoTx = !!editTx?.source
 
   const [type, setType]         = useState<TransactionType>((editTx?.type as TransactionType) ?? 'expense')
   const [amount, setAmount]     = useState(editTx ? String(editTx.amount) : '0')
@@ -197,6 +200,9 @@ export default function AddTransaction() {
       exchange_rate,
       // 仅 transfer 写 direction，其它类型一律 null（useTransactions 也会再兜底一次）
       direction: type === 'transfer' ? transferDir : null,
+      // 自动入账的流水被人看过并保存了，就不再算「待分类」。只有自动流水才带这个字段：
+      // 它们存在说明 003 迁移已经跑过；手记流水不带，免得没跑 003 的库报列不存在。
+      ...(isAutoTx ? { needs_review: false } : {}),
     }
 
     // 写操作走本地 outbox：UI 立刻更新，背景同步到 Supabase。离线时
@@ -204,6 +210,10 @@ export default function AddTransaction() {
     // 错误"路径 —— insert/update 总是 resolve。
     if (editTx) {
       await updateTx(editTx.id, payload)
+      // 记住「这个商户归这一类」，下次自动入账直接用。后端的记忆只用于支出。
+      if (isAutoTx && type === 'expense') {
+        rememberMerchant(user.id, editTx.merchant, categoryId)
+      }
     } else {
       await insertTx(payload)
     }

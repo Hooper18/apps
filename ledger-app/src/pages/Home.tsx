@@ -13,6 +13,7 @@ import type { Currency, TxDetail, TransactionType } from '../types'
 import type { TranslationKey } from '../lib/i18n'
 import TransactionSheet from '../components/TransactionSheet'
 import SwipeRow from '../components/SwipeRow'
+import AutoTag from '../components/AutoTag'
 import DeleteTxDialog from '../components/DeleteTxDialog'
 
 const DISPLAY_CURRENCIES = SUPPORTED_CURRENCIES
@@ -125,6 +126,9 @@ const { user } = useAuth()
           category_id: t.category_id,
           exchange_rate: t.exchange_rate,
           direction: t.direction,
+          source: t.source,
+          merchant: t.merchant,
+          needs_review: t.needs_review,
           categories: c ? { name: c.name, icon: c.icon } : null,
         } as TxDetail
       })
@@ -456,8 +460,9 @@ const { user } = useAuth()
                         {/* 分隔线从文字开始（iOS 列表的 inset separator），每组最后一行不画 */}
                         <div className={`flex-1 min-w-0 flex items-center py-3 pr-5 min-h-[60px] ${isLast ? '' : 'border-b border-gray-100'}`}>
                           <div className="flex-1 min-w-0">
-                            <p className="text-base text-gray-900 truncate">
-                              {tx.categories?.name ?? t('uncategorized')}
+                            <p className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-base text-gray-900 truncate">{tx.categories?.name ?? t('uncategorized')}</span>
+                              <AutoTag tx={tx} />
                             </p>
                             {tx.description && (
                               <p className="text-[13px] leading-[18px] text-gray-400 truncate">{tx.description}</p>

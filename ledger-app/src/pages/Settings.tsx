@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, ChevronRight, X, Check, Lock, Bell, ListOrdered, Coins, PenLine, Globe, Target, Upload } from 'lucide-react'
+import { LogOut, ChevronRight, X, Check, Lock, Bell, ListOrdered, Coins, PenLine, Globe, Target, Upload, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -396,6 +396,15 @@ export default function Settings() {
         {/* Other settings */}
         <p className="px-8 pt-6 pb-2 text-[13px] leading-[18px] text-gray-500">{t('otherSection')}</p>
         <div className="mx-4 bg-white rounded-2xl overflow-hidden">
+          <button
+            onClick={() => navigate('/auto-ingest')}
+            className="w-full flex items-center gap-3 px-4 py-3 min-h-[52px] active:bg-gray-50 text-left transition-colors"
+          >
+            <Zap size={20} strokeWidth={1.8} className="text-gray-500 shrink-0" />
+            <span className="flex-1 text-base text-gray-900">{t('autoIngestEntry')}</span>
+            <ChevronRight size={18} className="text-gray-300 shrink-0 -mr-1" />
+          </button>
+          <div className="border-t border-gray-100 ml-[52px]" />
           <button
             onClick={() => navigate('/budget')}
             className="w-full flex items-center gap-3 px-4 py-3 min-h-[52px] active:bg-gray-50 text-left transition-colors"

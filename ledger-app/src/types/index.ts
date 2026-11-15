@@ -50,6 +50,12 @@ export interface TxDetail {
   exchange_rate?: number | null
   /** 仅 type='transfer' 时使用：'in'=转入(+), 'out'=转出(-), null/undefined 视为 'in'。 */
   direction?: string | null
+  /** 自动入账的来源（wechat / applepay…）；手记的没有。 */
+  source?: string | null
+  /** 自动入账带来的商户原名。 */
+  merchant?: string | null
+  /** 自动入账时没能确定类目，等用户看一眼。 */
+  needs_review?: boolean | null
   categories: { name: string; icon: string } | null
 }
 

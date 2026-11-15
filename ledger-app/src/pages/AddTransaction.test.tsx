@@ -69,6 +69,11 @@ vi.mock('../hooks/useCategorySort', () => ({
   }),
 }))
 
+const rememberMerchantMock = vi.hoisted(() => vi.fn(() => true))
+vi.mock('../lib/merchantRules', () => ({
+  rememberMerchant: rememberMerchantMock,
+}))
+
 import AddTransaction from './AddTransaction'
 
 function renderPage(state: unknown = null) {
@@ -86,6 +91,7 @@ beforeEach(() => {
   navigateMock.mockClear()
   insertMock.mockClear()
   updateMock.mockClear()
+  rememberMerchantMock.mockClear()
   currencyState.recordLastUsedCurrency.mockClear()
   currencyState.effectiveDefaultCurrency = 'CNY'
   currencyState.baseCurrency = 'CNY'
@@ -253,6 +259,86 @@ describe('AddTransaction: 保存路径', () => {
     await Promise.resolve()
     expect(updateMock).toHaveBeenCalledWith('existing-tx', expect.objectContaining({ amount: 50 }))
     expect(insertMock).not.toHaveBeenCalled()
+  })
+
+  it('编辑自动入账的流水：清掉待分类，并记住这个商户归哪一类', async () => {
+    locationState.value = {
+      tx: {
+        id: 'auto-tx',
+        type: 'expense',
+        amount: 30.84,
+        currency: 'CNY',
+        description: 'DEMO CAFE · RM18.90',
+        date: '2026-11-14',
+        category_id: 'cat-trans',
+        exchange_rate: null,
+        source: 'wechat',
+        merchant: 'DEMO CAFE',
+        needs_review: true,
+        categories: { name: '交通', icon: '🚌' },
+      },
+    }
+    renderPage(locationState.value)
+    fireEvent.click(screen.getByRole('button', { name: /三餐/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'update' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(updateMock).toHaveBeenCalledWith(
+      'auto-tx',
+      expect.objectContaining({ category_id: 'cat-food', needs_review: false }),
+    )
+    expect(rememberMerchantMock).toHaveBeenCalledWith('u1', 'DEMO CAFE', 'cat-food')
+  })
+
+  it('编辑手记的流水：不带 needs_review，也不记商户', async () => {
+    locationState.value = {
+      tx: {
+        id: 'manual-tx',
+        type: 'expense',
+        amount: 50,
+        currency: 'CNY',
+        description: 'old note',
+        date: '2026-05-20',
+        category_id: 'cat-food',
+        exchange_rate: null,
+        categories: { name: '三餐', icon: '🍚' },
+      },
+    }
+    renderPage(locationState.value)
+    fireEvent.click(screen.getByRole('button', { name: 'update' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    const patch = (updateMock.mock.calls[0] as unknown[])[1] as Record<string, unknown>
+    expect('needs_review' in patch).toBe(false)
+    expect(rememberMerchantMock).not.toHaveBeenCalled()
+  })
+
+  it('自动入账的流水改成收入：清掉待分类，但不记商户（记忆只管支出）', async () => {
+    locationState.value = {
+      tx: {
+        id: 'auto-tx',
+        type: 'expense',
+        amount: 30.84,
+        currency: 'CNY',
+        description: 'X',
+        date: '2026-11-14',
+        category_id: 'cat-food',
+        exchange_rate: null,
+        source: 'wechat',
+        merchant: 'X',
+        needs_review: true,
+        categories: { name: '三餐', icon: '🍚' },
+      },
+    }
+    renderPage(locationState.value)
+    fireEvent.click(screen.getByRole('button', { name: 'income' }))
+    fireEvent.click(screen.getByRole('button', { name: /工资/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'update' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(updateMock).toHaveBeenCalledWith('auto-tx', expect.objectContaining({ type: 'income', needs_review: false }))
+    expect(rememberMerchantMock).not.toHaveBeenCalled()
   })
 
   it('未登录时早退，不调 insert/update', async () => {

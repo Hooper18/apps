@@ -44,6 +44,14 @@ export interface Database {
           date: string
           exchange_rate: number | null
           direction: string | null
+          /** 自动入账的来源（wechat / applepay / shot…），手记为 null。003 迁移加的列。 */
+          source: string | null
+          /** 来源里的唯一号（微信是交易号）。 */
+          external_id: string | null
+          /** 商户原名。 */
+          merchant: string | null
+          /** 自动入账时没能确定类目。 */
+          needs_review: boolean
           created_at: string
           updated_at: string
         }
@@ -58,6 +66,10 @@ export interface Database {
           date: string
           exchange_rate?: number | null
           direction?: string | null
+          source?: string | null
+          external_id?: string | null
+          merchant?: string | null
+          needs_review?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -70,6 +82,7 @@ export interface Database {
           date?: string
           exchange_rate?: number | null
           direction?: string | null
+          needs_review?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -122,6 +135,46 @@ export interface Database {
           amount?: number
           currency?: string
           period?: string
+        }
+        Relationships: []
+      }
+      merchant_rules: {
+        Row: {
+          user_id: string
+          merchant_key: string
+          category_id: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          merchant_key: string
+          category_id: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ingest_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          token_hash: string
+          label: string
+          created_at: string
+          last_used_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token_hash: string
+          label?: string
+          created_at?: string
+        }
+        Update: {
+          label?: string
         }
         Relationships: []
       }

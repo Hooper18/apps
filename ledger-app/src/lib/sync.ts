@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import * as outbox from './outbox'
 import type { OutboxEntry } from './outbox'
@@ -53,30 +54,30 @@ export function subscribeRefresh(cb: () => void): () => void {
  * 队列把它移除避免一直堵在前面卡后面的请求。
  */
 async function flushOne(entry: OutboxEntry): Promise<boolean> {
+  // outbox 里的表名和行是运行时才知道的（而且不是每张表都有 id 列，比如 merchant_rules），
+  // 所以这里不走按表生成的类型。
+  const table = () => (supabase as unknown as SupabaseClient).from(entry.table)
   try {
     if (entry.op === 'insert' && entry.row) {
-      const { error } = await supabase.from(entry.table).insert(entry.row)
+      const { error } = await table().insert(entry.row)
       if (error) return classifyError(error)
       return true
     }
     if (entry.op === 'update' && entry.row && entry.rowId) {
-      const { error } = await supabase
-        .from(entry.table)
+      const { error } = await table()
         .update(entry.row)
         .eq('id', entry.rowId)
       if (error) return classifyError(error)
       return true
     }
     if (entry.op === 'upsert' && entry.row) {
-      const { error } = await supabase
-        .from(entry.table)
+      const { error } = await table()
         .upsert(entry.row, entry.onConflict ? { onConflict: entry.onConflict } : undefined)
       if (error) return classifyError(error)
       return true
     }
     if (entry.op === 'delete' && entry.rowId) {
-      const { error } = await supabase
-        .from(entry.table)
+      const { error } = await table()
         .delete()
         .eq('id', entry.rowId)
       if (error) return classifyError(error)

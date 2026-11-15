@@ -5,7 +5,7 @@
 //
 //  · id        outbox 自己的唯一 ID（区别于 row 的 ID）
 //  · op        'insert' / 'update' / 'delete' / 'upsert'
-//  · table     'transactions' / 'categories' / 'budgets' / 'users_profile'
+//  · table     'transactions' / 'categories' / 'budgets' / 'users_profile' / 'merchant_rules'
 //  · row       insert/upsert/update 的载荷（对 delete 是 undefined）
 //  · rowId     update/delete 时目标 row 的 id
 //  · retries   失败重试次数（暂时只用于日志，没做指数退避）
@@ -16,7 +16,7 @@ const STORAGE_KEY = 'ledger:outbox'
 const EVENT_NAME = 'ledger:outbox-changed'
 
 export type OutboxOp = 'insert' | 'update' | 'delete' | 'upsert'
-export type OutboxTable = 'transactions' | 'categories' | 'budgets' | 'users_profile'
+export type OutboxTable = 'transactions' | 'categories' | 'budgets' | 'users_profile' | 'merchant_rules'
 
 export interface OutboxEntry {
   id: string

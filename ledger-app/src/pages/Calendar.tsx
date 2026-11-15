@@ -10,6 +10,7 @@ import type { Currency, TxDetail } from '../types'
 import type { TranslationKey } from '../lib/i18n'
 import TransactionSheet from '../components/TransactionSheet'
 import SwipeRow from '../components/SwipeRow'
+import AutoTag from '../components/AutoTag'
 import DeleteTxDialog from '../components/DeleteTxDialog'
 
 function localDateStr(d: Date = new Date()): string {
@@ -92,6 +93,9 @@ export default function Calendar() {
           category_id: t.category_id,
           exchange_rate: t.exchange_rate,
           direction: t.direction,
+          source: t.source,
+          merchant: t.merchant,
+          needs_review: t.needs_review,
           categories: c ? { name: c.name, icon: c.icon } : null,
         } as TxDetail
       })
@@ -296,8 +300,9 @@ export default function Calendar() {
                       {tx.categories?.icon ?? '📦'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-base text-gray-900 truncate">
-                        {tx.categories?.name ?? t('uncategorized')}
+                      <p className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-base text-gray-900 truncate">{tx.categories?.name ?? t('uncategorized')}</span>
+                        <AutoTag tx={tx} />
                       </p>
                       {tx.description && (
                         <p className="text-[13px] leading-[18px] text-gray-400 truncate">{tx.description}</p>

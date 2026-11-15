@@ -21,6 +21,7 @@ const Budget = lazy(() => import('./pages/Budget'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const About = lazy(() => import('./pages/About'))
 const CategoryOrder = lazy(() => import('./pages/CategoryOrder'))
+const AutoIngest = lazy(() => import('./pages/AutoIngest'))
 
 function LoadingScreen() {
   return (
@@ -132,6 +133,16 @@ function AppRoutes() {
             <ProtectedRoute>
               <Layout hideNav>
                 <CategoryOrder />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/auto-ingest"
+          element={
+            <ProtectedRoute>
+              <Layout hideNav>
+                <AutoIngest />
               </Layout>
             </ProtectedRoute>
           }

@@ -5,6 +5,7 @@
     .venv\\Scripts\\python -m wxpay_sync.sync --dry-run    # 只打印要发什么，不发、不动游标
     .venv\\Scripts\\python -m wxpay_sync.sync --since 2026-11-01   # 从这天起补发
     .venv\\Scripts\\python -m wxpay_sync.sync --learn      # 把全部历史付款发去「学习商户归类」，不入账
+    .venv\\Scripts\\python -m wxpay_sync.sync --watch      # 常驻：盯着微信的库文件，一有变化就同步
 
 只读：原库文件只读取、不修改；解密在内存里完成，磁盘上不落明文。
 """
@@ -26,6 +27,8 @@ from .parse import parse_pay_message
 # 原因：电脑关机期间的付款是开机后才同步进本地库的，时间戳却是付款当时，可能早于游标。
 OVERLAP_SECONDS = 7 * 24 * 3600
 CHUNK = 50
+# 已经被后端确认过（新入账或已存在）的交易号记在 state.json 里，下次不再重发。只留最近这么多个。
+SENT_KEEP = 1000
 REQUIRED = ("db_path", "keys_path", "key_name")
 REQUIRED_TO_SEND = ("endpoint", "token")
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -126,11 +129,26 @@ def open_wechat_db(config: dict):
             raise SyncError(f"解密失败：{second}") from second
 
 
+def _read_payments(open_db, config: dict, since_ts: int, tz: tzinfo | None) -> list[dict]:
+    """打开库 → 读出付款 → 关库。连接一定要关：整个明文库都在内存里，常驻模式下不关会越攒越多。"""
+    try:
+        conn = open_db(config)
+        try:
+            return collect_payments(store.read_messages(conn, since_ts), tz=tz)
+        finally:
+            conn.close()
+    except (store.StoreError, DecryptError) as e:
+        raise SyncError(str(e)) from e
+
+
 def _load_state(path: str):
     try:
         with open(path, encoding="utf-8") as f:
             s = json.load(f)
-        return {"start": int(s["start"]), "cursor": int(s["cursor"])}
+        state = {"start": int(s["start"]), "cursor": int(s["cursor"])}
+        if isinstance(s.get("sent"), list):
+            state["sent"] = [str(x) for x in s["sent"]]
+        return state
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -158,6 +176,7 @@ def run(
     learn: bool = False,
     tz: tzinfo | None = None,
     log=print,
+    quiet_when_idle: bool = False,
 ) -> dict:
     needed = REQUIRED if dry_run else REQUIRED + REQUIRED_TO_SEND
     missing = [k for k in needed if not config.get(k)]
@@ -168,11 +187,7 @@ def run(
     state = _load_state(state_path)
 
     if learn:
-        try:
-            conn = open_db(config)
-            payments = collect_payments(store.read_messages(conn, 0), tz=tz)
-        except (store.StoreError, DecryptError) as e:
-            raise SyncError(str(e)) from e
+        payments = _read_payments(open_db, config, 0, tz)
         payload = build_learn_payload(payments)
         log(f"历史付款 {len(payments)} 笔，其中带商户名的 {len(payload['items'])} 笔")
         if dry_run:
@@ -198,11 +213,7 @@ def run(
     cursor = state["cursor"] if state else start
     read_from = max(start, cursor - OVERLAP_SECONDS) if since is None else since
 
-    try:
-        conn = open_db(config)
-        payments = collect_payments(store.read_messages(conn, read_from), tz=tz)
-    except (store.StoreError, DecryptError) as e:
-        raise SyncError(str(e)) from e
+    payments = _read_payments(open_db, config, read_from, tz)
 
     if dry_run:
         log(f"找到 {len(payments)} 笔付款（演练，不发送）：")
@@ -210,20 +221,91 @@ def run(
             log(_describe(p))
         return {"found": len(payments), "sent": 0, "inserted": 0, "duplicates": 0}
 
+    # 重发窗口里的付款大多上次已经发过、后端也确认过了：跳过，只发没见过的
+    acknowledged = list(state.get("sent", [])) if state else []
+    known = set(acknowledged)
+    fresh = [p for p in payments if p["external_id"] not in known]
+
     inserted = duplicates = 0
-    for i in range(0, len(payments), CHUNK):
-        result = post(config["endpoint"], config["token"], build_payload(payments[i:i + CHUNK]))
+    for i in range(0, len(fresh), CHUNK):
+        chunk = fresh[i:i + CHUNK]
+        result = post(config["endpoint"], config["token"], build_payload(chunk))
         if not result.get("ok"):
             raise SyncError(f"后端拒绝了请求：{result.get('error')}")
         inserted += int(result.get("inserted", 0))
         duplicates += int(result.get("duplicates", 0))
+        acknowledged.extend(p["external_id"] for p in chunk)
 
     newest = max(
         [cursor] + [int(datetime.fromisoformat(p["occurred_at"]).timestamp()) for p in payments]
     )
-    _save_state(state_path, {"start": min(start, state["start"]) if state else start, "cursor": newest})
-    log(f"发送 {len(payments)} 笔：新入账 {inserted}，已存在 {duplicates}")
-    return {"found": len(payments), "sent": len(payments), "inserted": inserted, "duplicates": duplicates}
+    new_state = {"start": min(start, state["start"]) if state else start, "cursor": newest}
+    if acknowledged:
+        new_state["sent"] = acknowledged[-SENT_KEEP:]
+    _save_state(state_path, new_state)
+    if fresh or not quiet_when_idle:
+        log(f"发送 {len(fresh)} 笔：新入账 {inserted}，已存在 {duplicates}")
+    return {"found": len(payments), "sent": len(fresh), "inserted": inserted, "duplicates": duplicates}
+
+
+def watch(
+    config: dict,
+    *,
+    run_once,
+    mtime=os.path.getmtime,
+    sleep=time.sleep,
+    clock=time.time,
+    log=print,
+    poll: float = 2.0,
+    settle: float = 1.5,
+    min_gap: float = 5.0,
+    heartbeat: float = 600.0,
+    max_loops: int | None = None,
+) -> None:
+    """常驻：微信的库文件（或它的 WAL）一变就同步一次。
+
+    · poll      每隔多久看一眼文件修改时间
+    · settle    发现变化后等一小会儿再读，让微信把这一批写完
+    · min_gap   两次同步之间至少隔这么久（这个库里还有别的服务号消息，变得很勤）
+    · heartbeat 文件一直没变也至少每隔这么久同步一次，兜底
+    同步出错只记日志，不退出。
+    """
+    paths = [config["db_path"], config["db_path"] + "-wal"]
+
+    def stamp():
+        out = []
+        for p in paths:
+            try:
+                out.append(mtime(p))
+            except OSError:
+                out.append(0)
+        return tuple(out)
+
+    last_stamp = None
+    last_run = None
+    loops = 0
+    while True:
+        now = clock()
+        current = stamp()
+        changed = current != last_stamp
+        due = last_run is None or now - last_run >= heartbeat
+        waited = last_run is None or now - last_run >= min_gap
+        if (changed and waited) or due:
+            if changed and last_stamp is not None:
+                sleep(settle)
+                current = stamp()
+            try:
+                run_once()
+            except SyncError as e:
+                log(f"失败：{e}")
+            except Exception as e:  # 常驻进程不能因为一次意外就退出
+                log(f"意外错误：{type(e).__name__}: {e}")
+            last_stamp = current
+            last_run = clock()
+        loops += 1
+        if max_loops is not None and loops >= max_loops:
+            return
+        sleep(poll)
 
 
 def main(argv=None) -> int:
@@ -232,6 +314,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="只打印，不发送，不动游标")
     ap.add_argument("--since", help="从这一天起（YYYY-MM-DD），覆盖起点")
     ap.add_argument("--learn", action="store_true", help="把历史付款发去学习商户归类，不入账")
+    ap.add_argument("--watch", action="store_true", help="常驻：盯着微信的库文件，一有变化就同步")
     args = ap.parse_args(argv)
 
     log_path = os.path.join(HERE, "sync.log")
@@ -256,6 +339,15 @@ def main(argv=None) -> int:
                 since = int(datetime.strptime(args.since, "%Y-%m-%d").astimezone().timestamp())
             except ValueError as e:
                 raise SyncError("--since 要写成 YYYY-MM-DD") from e
+        if args.watch:
+            if args.dry_run or args.learn or since is not None:
+                raise SyncError("--watch 不能和 --dry-run / --learn / --since 一起用")
+            log("开始盯着微信的库文件，变了就同步。Ctrl+C 退出。")
+            try:
+                watch(config, run_once=lambda: run(config, log=log, quiet_when_idle=True), log=log)
+            except KeyboardInterrupt:
+                log("已停止。")
+            return 0
         run(config, dry_run=args.dry_run, since=since, learn=args.learn, log=log)
         return 0
     except SyncError as e:

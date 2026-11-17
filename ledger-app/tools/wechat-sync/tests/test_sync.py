@@ -17,6 +17,7 @@ from wxpay_sync.sync import (
     build_payload,
     collect_payments,
     run,
+    watch,
 )
 
 TZ8 = timezone(timedelta(hours=8))
@@ -156,6 +157,7 @@ class RunTest(unittest.TestCase):
             "state_path": self.state_path,
         }
         self.posts = []
+        self.opened = []
         self.conn = make_conn([
             (ts(10), samples.ZH_BALANCE_MYR, True),
             (ts(14, 13, 15), samples.EN_CARD_MYR, True),
@@ -164,6 +166,7 @@ class RunTest(unittest.TestCase):
         ])
 
     def tearDown(self):
+        self.conn.close()
         for name in os.listdir(self.dir):
             os.remove(os.path.join(self.dir, name))
         os.rmdir(self.dir)
@@ -173,7 +176,21 @@ class RunTest(unittest.TestCase):
         return {"ok": True, "inserted": len(payload["items"]), "duplicates": 0}
 
     def open_db(self, config):
-        return self.conn
+        # run() 用完会把连接关掉（常驻模式下不关会一直占内存），所以每次给它一份新的拷贝
+        self.opened.append(sqlite3.connect(":memory:"))
+        self.opened[-1].deserialize(self.conn.serialize())
+        return self.opened[-1]
+
+    def test_the_database_connection_is_closed_after_every_run(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump({"start": ts(14, 0), "cursor": ts(14, 0)}, f)
+        self.go(now=ts(15, 3))
+        self.go(now=ts(15, 3), dry_run=True)
+        self.go(now=ts(15, 3), learn=True)
+        self.assertEqual(len(self.opened), 3)
+        for conn in self.opened:
+            with self.assertRaises(sqlite3.ProgrammingError):
+                conn.execute("select 1")
 
     def go(self, **kw):
         kw.setdefault("post", self.post)
@@ -259,11 +276,143 @@ class RunTest(unittest.TestCase):
         self.assertEqual(len(payload["items"]), 3)
         self.assertEqual(self.state()["cursor"], ts(14, 0))
 
+    def test_acknowledged_payments_are_not_posted_again(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump({"start": ts(14, 0), "cursor": ts(14, 0)}, f)
+        self.go(now=ts(15, 3))
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(
+            self.state()["sent"],
+            ["4200000000202601010000000002", "1000050000202601010000000003"],
+        )
+        # 第二次：重发窗口里还是这两笔，但后端已经确认过了，不再发请求
+        lines = []
+        summary = self.go(now=ts(15, 4), log=lines.append, quiet_when_idle=True)
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(summary["sent"], 0)
+        self.assertEqual(lines, [])
+
+    def test_only_the_new_payment_is_posted_next_time(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump({"start": ts(14, 0), "cursor": ts(14, 0)}, f)
+        self.go(now=ts(15, 3))
+        new_xml = samples.pay_xml("已支付¥8.50", "使用零钱支付¥8.50", display_name="MINI MART 01",
+                                  transaction_id="4200000000202601010000000077")
+        self.conn.execute(
+            f"insert into {store.table_name()} (create_time, message_content) values (?, ?)",
+            (ts(15, 5), new_xml),
+        )
+        self.conn.commit()
+        self.go(now=ts(15, 6))
+        self.assertEqual(len(self.posts), 2)
+        self.assertEqual([i["merchant"] for i in self.posts[1][2]["items"]], ["MINI MART 01"])
+        self.assertEqual(self.state()["sent"][-1], "4200000000202601010000000077")
+
+    def test_failed_post_does_not_mark_anything_as_acknowledged(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump({"start": ts(14, 0), "cursor": ts(14, 0)}, f)
+
+        def boom(url, token, payload):
+            raise SyncError("HTTP 500")
+
+        with self.assertRaises(SyncError):
+            self.go(now=ts(15, 3), post=boom)
+        self.assertNotIn("sent", self.state())
+        self.go(now=ts(15, 4))
+        self.assertEqual(len(self.posts[0][2]["items"]), 2)
+
     def test_missing_config_field_is_reported(self):
         del self.config["token"]
         with self.assertRaises(SyncError) as ctx:
             self.go(now=ts(15, 3))
         self.assertIn("token", str(ctx.exception))
+
+
+class WatchTest(unittest.TestCase):
+    """watch() 的时钟、睡眠、文件时间都是注入的，这里用假的一步步推。"""
+
+    def setUp(self):
+        self.now = 1000.0
+        self.mtimes = {"db": 1.0, "db-wal": 1.0}
+        self.runs = []
+        self.sleeps = []
+        self.logs = []
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def mtime(self, path):
+        if path not in self.mtimes:
+            raise OSError("missing")
+        return self.mtimes[path]
+
+    def go(self, loops, run_once=None, **kw):
+        def default_run():
+            self.runs.append(self.now)
+
+        watch(
+            {"db_path": "db"},
+            run_once=run_once or default_run,
+            mtime=self.mtime,
+            sleep=self.sleep,
+            clock=self.clock,
+            log=self.logs.append,
+            max_loops=loops,
+            **kw,
+        )
+
+    def test_runs_once_at_start_then_stays_idle_while_nothing_changes(self):
+        self.go(5)
+        self.assertEqual(len(self.runs), 1)
+
+    def test_runs_again_soon_after_the_file_changes(self):
+        def run_once():
+            self.runs.append(self.now)
+            if len(self.runs) == 1:
+                self.mtimes["db-wal"] = 2.0  # 第一次同步后，微信又写了一条
+
+        self.go(6, run_once=run_once, poll=2.0, settle=1.5, min_gap=5.0)
+        self.assertEqual(len(self.runs), 2)
+        self.assertLess(self.runs[1] - self.runs[0], 10)
+        self.assertIn(1.5, self.sleeps)  # 发现变化后先等了一小会儿
+
+    def test_respects_the_minimum_gap_between_runs(self):
+        def run_once():
+            self.runs.append(self.now)
+            self.mtimes["db"] += 1  # 每次同步后文件都又变了（库里别的消息很多）
+
+        self.go(8, run_once=run_once, poll=2.0, settle=0.0, min_gap=5.0)
+        gaps = [b - a for a, b in zip(self.runs, self.runs[1:])]
+        self.assertTrue(gaps)
+        self.assertTrue(all(g >= 5.0 for g in gaps), gaps)
+
+    def test_heartbeat_runs_even_without_changes(self):
+        self.go(8, poll=2.0, heartbeat=6.0)
+        self.assertGreaterEqual(len(self.runs), 3)
+
+    def test_a_failed_sync_is_logged_and_the_loop_keeps_going(self):
+        calls = []
+
+        def run_once():
+            calls.append(self.now)
+            if len(calls) == 1:
+                raise SyncError("连不上后端")
+            if len(calls) == 2:
+                raise RuntimeError("boom")
+
+        self.go(10, run_once=run_once, poll=2.0, heartbeat=4.0)
+        self.assertGreaterEqual(len(calls), 3)
+        self.assertTrue(any("连不上后端" in line for line in self.logs))
+        self.assertTrue(any("RuntimeError" in line for line in self.logs))
+
+    def test_missing_wal_file_is_tolerated(self):
+        del self.mtimes["db-wal"]
+        self.go(3)
+        self.assertEqual(len(self.runs), 1)
 
 
 if __name__ == "__main__":

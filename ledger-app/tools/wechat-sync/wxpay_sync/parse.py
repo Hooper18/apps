@@ -1,6 +1,6 @@
 """把「微信支付」服务号的一条消息（XML）解析成一笔付款。
 
-只认付款凭证：标题是「已支付¥6.52」（中文界面）或「¥6.52 paid」（英文界面）。
+只认付款凭证：标题是「已支付¥6.52」「已扣费¥6.52」「已续费¥6.52」（中文界面）或「¥6.52 paid」（英文界面）。
 记账日报、汇率卡通知、退款到账等其它消息一律返回 None。
 
 真实消息里用得到的节点：
@@ -15,13 +15,17 @@ from datetime import datetime, tzinfo
 
 _YEN = "¥￥"
 _AMOUNT = r"([\d,]+(?:\.\d{1,2})?)"
-_TITLE_ZH = re.compile(rf"^已支付[{_YEN}]\s*{_AMOUNT}$")
+# 已支付 = 当场付款；已扣费 = 先购后付这类自动扣款；已续费 = 订阅自动续费。都是真金白银的支出。
+_TITLE_ZH = re.compile(rf"^已(?:支付|扣费|续费)[{_YEN}]\s*{_AMOUNT}$")
 _TITLE_EN = re.compile(rf"^[{_YEN}]\s*{_AMOUNT}\s+paid$", re.IGNORECASE)
 _METHOD_ZH = re.compile(rf"^使用(.+?)支付[{_YEN}]\s*{_AMOUNT}?")
 _METHOD_EN = re.compile(rf"^Paid by\s*(.+?)\s*[{_YEN}]\s*{_AMOUNT}?", re.IGNORECASE)
 # 少数凭证的标题不带金额，金额只在扣款方式那一行里
 _RECEIPT_TITLES = ("微信支付凭证", "Weixin Pay Receipt", "WeChat Pay Receipt")
 _PAYEE_ZH = re.compile(r"^收款方\s*(.+)$")
+# 自动扣款 / 续费的消息没有 display_name，商户和扣款方式写在正文的这几行里
+_SERVICE_ZH = re.compile(r"^(?:扣费服务|续费项目)\s*(.+)$")
+_METHOD_LINE_ZH = re.compile(r"^(?:支付方式|续费方式)\s*(.+)$")
 _PAYEE_EN = re.compile(r"^Payee\s*(.+)$", re.IGNORECASE)
 _PRICE_ZH = re.compile(rf"^标价\s*{_AMOUNT}\s*(.+)$")
 _PRICE_EN = re.compile(rf"^Price\s*([^\d\s]+?)\s*{_AMOUNT}$", re.IGNORECASE)
@@ -120,8 +124,18 @@ def parse_pay_message(xml: str, create_time: int, tz: tzinfo | None = None):
                 payee = pm.group(1).strip()
     if not amount:
         return None
+    service = ""
+    for line in lines:
+        if not service:
+            sm = _SERVICE_ZH.match(line)
+            if sm:
+                service = sm.group(1).strip()
+        if not method:
+            lm = _METHOD_LINE_ZH.match(line)
+            if lm:
+                method = lm.group(1).strip()
 
-    merchant = _node(xml, "display_name") or payee
+    merchant = _node(xml, "display_name") or payee or service
     price_amount, price_currency, note = _price(lines)
 
     external_id = _node(xml, "transaction_id")

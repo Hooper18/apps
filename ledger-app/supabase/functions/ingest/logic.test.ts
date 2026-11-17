@@ -279,6 +279,14 @@ describe('normalizeRequest', () => {
     expect(r.ok && r.items[0]).toMatchObject({ currency: 'CNY' })
   })
 
+  it('defaults Apple Pay amounts without a currency to MYR (cards are used in Malaysia)', () => {
+    const r = normalizeRequest({ source: 'applepay', amount: '3.90', merchant: 'Demo Shop' }, now)
+    expect(r.ok && r.items[0]).toMatchObject({ amount: 3.9, currency: 'MYR' })
+    // 金额里带了币种就照币种来
+    const s = normalizeRequest({ source: 'applepay', amount: 'S$3.90', merchant: 'Demo Shop' }, now)
+    expect(s.ok && s.items[0]).toMatchObject({ currency: 'SGD' })
+  })
+
   it('reports bad items one by one without failing the batch', () => {
     const r = normalizeRequest(
       { source: 'wechat', items: [{ amount: 'abc' }, { amount: 5, currency: 'XXX' }, { amount: 5, type: 'gift' }, { amount: 5 }] },

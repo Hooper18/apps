@@ -191,7 +191,10 @@ function text(v: unknown): string {
   return typeof v === 'string' ? v.trim().slice(0, MAX_TEXT) : ''
 }
 
-function normalizeItem(raw: unknown, now: Date): NormalizedItem {
+// 金额里认不出币种时的默认值。Apple Pay 刷的是用户在马来西亚用的卡，Wallet 给的金额可能只有数字。
+const DEFAULT_CURRENCY_BY_SOURCE: Record<string, string> = { applepay: 'MYR' }
+
+function normalizeItem(raw: unknown, now: Date, source: string): NormalizedItem {
   if (typeof raw !== 'object' || raw === null) return { ok: false, external_id: null, error: 'bad_item' }
   const r = raw as Record<string, unknown>
   const external_id = typeof r.external_id === 'string' && r.external_id.trim() ? r.external_id.trim().slice(0, 100) : null
@@ -208,7 +211,7 @@ function normalizeItem(raw: unknown, now: Date): NormalizedItem {
     currency = normalizeCurrency(r.currency)
     if (!currency) return { ok: false, external_id, error: 'unsupported_currency' }
   } else {
-    currency = parsed.currency ?? 'CNY'
+    currency = parsed.currency ?? DEFAULT_CURRENCY_BY_SOURCE[source] ?? 'CNY'
   }
 
   const type = r.type === undefined || r.type === null || r.type === '' ? 'expense' : r.type
@@ -262,7 +265,7 @@ export function normalizeRequest(body: unknown, now: Date): NormalizedRequest {
   }
 
   if (rawItems.length > MAX_ITEMS) return { ok: false, error: 'too_many_items' }
-  return { ok: true, mode: 'ingest', source, items: rawItems.map((it) => normalizeItem(it, now)), learnItems: [] }
+  return { ok: true, mode: 'ingest', source, items: rawItems.map((it) => normalizeItem(it, now, source)), learnItems: [] }
 }
 
 export interface TxLite {

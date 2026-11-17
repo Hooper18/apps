@@ -68,6 +68,34 @@ describe('parseNotice', () => {
     })
   })
 
+  it('reads the Traditional Chinese wording', () => {
+    // 按简体句式推的（给 → 給），没见过真实样本
+    expect(parseNotice('您已支付了RM12.30給Demo Mall。')).toEqual({ amount: 12.30, currency: 'MYR', merchant: 'Demo Mall' })
+    expect(parseNotice('自動付款\n您已支付了 RM 5.00 給 Demo Cafe。')).toEqual({ amount: 5, currency: 'MYR', merchant: 'Demo Cafe' })
+  })
+
+  it('reads a DuitNow transfer notice (QR payments to shops arrive as transfers)', () => {
+    // 2026-11-17 真机看到的句式（标题「DuitNow转账成功！」，正文如下），商户名已换成假的
+    expect(parseNotice('您已成功转账 RM 45.00 给 DEMO TRADING。')).toEqual({ amount: 45, currency: 'MYR', merchant: 'DEMO TRADING' })
+    expect(parseNotice('DuitNow转账成功！\n您已成功转账 RM 45.00 给 DEMO TRADING。')).toEqual({
+      amount: 45,
+      currency: 'MYR',
+      merchant: 'DEMO TRADING',
+    })
+    // 繁体和英文按上面推的，没见过真实样本
+    expect(parseNotice('您已成功轉賬 RM 8.50 給 Demo Cafe。')).toEqual({ amount: 8.5, currency: 'MYR', merchant: 'Demo Cafe' })
+    expect(parseNotice('您已成功轉帳 RM 8.50 給 Demo Cafe。')).toEqual({ amount: 8.5, currency: 'MYR', merchant: 'Demo Cafe' })
+    expect(parseNotice('You have successfully transferred RM 8.50 to Demo Cafe.')).toEqual({
+      amount: 8.5,
+      currency: 'MYR',
+      merchant: 'Demo Cafe',
+    })
+  })
+
+  it('ignores the points / promo notices TNG sends', () => {
+    expect(parseNotice('快来看看今天你的积分能兑换什么好礼吧！')).toBeNull()
+  })
+
   it('reads the English wording', () => {
     expect(parseNotice('You have paid RM12.30 to Demo Mall.')).toEqual({ amount: 12.30, currency: 'MYR', merchant: 'Demo Mall' })
     expect(parseNotice("You've paid RM 5.00 to Demo Cafe")).toEqual({ amount: 5, currency: 'MYR', merchant: 'Demo Cafe' })

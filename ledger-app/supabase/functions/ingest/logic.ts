@@ -78,10 +78,13 @@ export function parseAmount(input: unknown): { amount: number; currency: string 
 // 付款通知的固定句式（手机把通知原文转发过来时用）。只认「我付了钱」这一种，
 // 收款、充值、优惠推送都不匹配，宁可不记也不乱记。
 //   Touch 'n Go 中文：您已支付了RM12.30给Demo Mall。
+//   Touch 'n Go 繁体（按简体句式推的，没见过真实样本）：您已支付了RM12.30給Demo Mall。
 //   Touch 'n Go 英文（按中文句式推的，没见过真实样本）：You have paid RM12.30 to Demo Mall.
+//   Touch 'n Go DuitNow 转账（2026-11-17 真机看到，扫商户的 DuitNow 码付款也是这句）：您已成功转账 RM 45.00 给 DEMO TRADING。
+//     繁体「轉賬 / 轉帳」和英文「You have successfully transferred … to …」是推的，没见过真实样本。
 const NOTICE_PATTERNS: RegExp[] = [
-  /您已支付了\s*([A-Za-z$¥￥]{1,4})\s*([\d,]+(?:\.\d+)?)\s*给\s*(.+?)\s*[。.]?\s*$/m,
-  /You(?:'ve| have)? paid\s*([A-Za-z$¥￥]{1,4})\s*([\d,]+(?:\.\d+)?)\s*to\s*(.+?)\s*\.?\s*$/im,
+  /您已(?:支付了|成功(?:转账|轉賬|轉帳))\s*([A-Za-z$¥￥]{1,4})\s*([\d,]+(?:\.\d+)?)\s*[给給]\s*(.+?)\s*[。.]?\s*$/m,
+  /You(?:'ve| have)? (?:paid|successfully transferred)\s*([A-Za-z$¥￥]{1,4})\s*([\d,]+(?:\.\d+)?)\s*to\s*(.+?)\s*\.?\s*$/im,
 ]
 
 /** 从转发过来的付款通知文字里取金额、币种、商户。不是付款通知返回 null。 */

@@ -172,7 +172,7 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - Segmented 每一段是普通 `<button>`、文字直接放在 button 里（测试按 `getByRole('button', { name })` / `getByText` 定位）。
 - 弹层关闭按钮的 aria-label 用 `t('close')`，不要用 `t('cancel')`（和删除确认框的「取消」撞名）。
 
-## 自动记账（2026-11-15 加，**后端还没上线**）
+## 自动记账（2026-11-15 加，已上线）
 
 用法和上线步骤见 `自动记账说明.md`，设计见仓库根 `docs/superpowers/specs/2026-11-15-ledger-auto-ingest-design.md`。这里只记写代码时要守的约定。
 
@@ -192,6 +192,18 @@ React + Supabase 的多币种在线记账 PWA。前身：仓库根目录 `financ
 - `components/AutoTag.tsx`：流水行类目名旁的「自动」/「待分类」标记，首页和日历都用。新列表要显示自动流水照这个接。
 - `pages/AutoIngest.tsx`（`/auto-ingest`，设置 → 自动记账）：令牌的生成 / 列表 / 撤销，直接调 supabase，不走离线队列。
 - `AddTransaction` 保存自动流水时：清 `needs_review`，支出类再调 `rememberMerchant` 记住商户归类。
+
+### 付款提醒（Web Push，2026-11-15 加，2026-11-17 上线，真机推送未验证）
+- 后端：`supabase/functions/ingest/webpush.ts` 自己实现 RFC 8291 加密 + RFC 8292 VAPID，只用 WebCrypto、**不能有 import**；测试里用 RFC 8291 的官方样例逐字节校验，改这个文件必须保持那条测试通过。
+- `handler.ts` 每笔新入账给该用户所有订阅发一条（超过 3 笔合并成汇总）；推送出任何问题都不能影响入账。推送内容的结构是 `PushPayload`，`public/push-sw.js` 按它显示和处理点击——两边要一起改。
+- VAPID 公钥写在 `src/lib/push.ts`（公开的）；私钥只在后端 secrets（`VAPID_PRIVATE_JWK`）和本机 `supabase/.temp/vapid-private.json`，**不能进仓库**。换密钥后所有设备要重新开提醒。
+- `public/push-sw.js` 由 vite-plugin-pwa 生成的 sw.js 通过 `workbox.importScripts` 引入，不要单独注册。
+- 点通知 → `/?confirm=<流水 id>` → `Home` 找到那一笔跳 `/add`（编辑态）。App 已经开着时由 SW 发 `ledger:open` 消息，`App.tsx` 里接。
+- 自动入账的流水 `needs_review` 一律为 true（待确认），在记账页保存即确认。标题和按钮在这种情况下写「确认」（`confirmTx`）。
+- `useSync` 在 App 回到前台（`visibilitychange` / `pageshow`）时同步一次，10 秒内不重复。自动入账的流水靠这个出现在已经开着的 App 里。
+
+### AA
+- `lib/aa.ts`：`splitShare` / `withAaNote`。记账页金额右边的「AA」只在支出时出现；选人数后金额是每人一份，备注末尾追加「AA N人 总额 X」；手动改金额就退出 AA。人数按钮的 aria-label 是 `AA <n>`（测试靠它）。
 
 ### 电脑同步工具 `tools/wechat-sync/`
 - Python，自带 `.venv`，测试 `python -m unittest discover -s tests -t .`。说明见那里的 `README.md`。

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { handleIngest, sha256Hex, type Db, type IngestRow } from './handler.ts'
+import { handleIngest, sha256Hex, type Db, type IngestRow, type PushSubscriptionRow } from './handler.ts'
 import type { CategoryLite, TxLite } from './logic.ts'
 
 const TOKEN = 'lgr_test-token'
@@ -21,6 +21,10 @@ class FakeDb implements Db {
   rates: Record<string, number> = { MYR: 0.61 }
   failInsert: string | null = null
   historyRange: [string, string] | null = null
+  subs: PushSubscriptionRow[] = []
+  pushes: Array<{ sub: string; payload: { title: string; body: string; url: string; tag: string } }> = []
+  pushOutcome: Record<string, 'ok' | 'gone' | 'error' | 'throw'> = {}
+  failListSubs = false
 
   async findUserByTokenHash(hash: string) {
     return hash === this.tokenHash ? { user_id: 'u1', token_id: 'tok1' } : null
@@ -54,6 +58,19 @@ class FakeDb implements Db {
   }
   async getRate(currency: string) {
     return this.rates[currency] ?? null
+  }
+  async listPushSubscriptions() {
+    if (this.failListSubs) throw new Error('relation "push_subscriptions" does not exist')
+    return this.subs
+  }
+  async sendPush(sub: PushSubscriptionRow, text: string) {
+    const outcome = this.pushOutcome[sub.id] ?? 'ok'
+    if (outcome === 'throw') throw new Error('network down')
+    if (outcome === 'ok') this.pushes.push({ sub: sub.id, payload: JSON.parse(text) })
+    return outcome
+  }
+  async deletePushSubscription(id: string) {
+    this.subs = this.subs.filter((s) => s.id !== id)
   }
 }
 
@@ -116,6 +133,7 @@ describe('ingest', () => {
     expect(res.body).toMatchObject({ ok: true, inserted: 1, duplicates: 0, errors: 0 })
     expect(db.rows).toEqual([
       {
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         user_id: 'u1',
         type: 'expense',
         amount: 30.84,
@@ -127,7 +145,7 @@ describe('ingest', () => {
         source: 'wechat',
         external_id: 'tx-1',
         merchant: 'DEMO CAFE',
-        needs_review: false,
+        needs_review: true,
         created_at: '2026-11-14T05:15:15.000Z',
         updated_at: NOW.toISOString(),
       },
@@ -146,7 +164,7 @@ describe('ingest', () => {
     expect(res.body).toMatchObject({ inserted: 1, duplicates: 1 })
   })
 
-  it('flags an unknown merchant for review under 其它', async () => {
+  it('files an unknown merchant under 其它', async () => {
     const res = await handleIngest(req({ source: 'wechat', items: [{ ...wechatItem, merchant: 'NEW SHOP' }] }), db, NOW)
     expect(db.rows[0]).toMatchObject({ category_id: 'c-other', needs_review: true })
     expect(res.body).toMatchObject({ results: [{ external_id: 'tx-1', status: 'inserted', category: '其它', needs_review: true }] })
@@ -199,6 +217,79 @@ describe('ingest', () => {
   it('summarises a batch', async () => {
     const res = await handleIngest(req({ source: 'wechat', items: [wechatItem, { ...wechatItem, external_id: 'tx-2' }] }), db, NOW)
     expect((res.body as { message: string }).message).toBe('新入账 2 笔')
+  })
+})
+
+describe('push', () => {
+  const item = (n: number) => ({
+    external_id: `tx-${n}`,
+    amount: '30.84',
+    currency: 'CNY',
+    merchant: 'DEMO CAFE',
+    note: 'RM18.90',
+    date: '2026-11-14',
+    occurred_at: '2026-11-14T13:15:15+08:00',
+  })
+  const phone = { id: 's1', endpoint: 'https://push.example/1', p256dh: 'k', auth: 'a' }
+  const laptop = { id: 's2', endpoint: 'https://push.example/2', p256dh: 'k', auth: 'a' }
+
+  it('tells every subscribed device about each new row, pointing at its confirm page', async () => {
+    db.subs = [phone, laptop]
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1)] }), db, NOW)
+    expect(res.body).toMatchObject({ inserted: 1, pushed: 2 })
+    expect(db.pushes.map((p) => p.sub)).toEqual(['s1', 's2'])
+    const id = db.rows[0].id
+    expect(db.pushes[0].payload).toEqual({
+      title: '已记 CNY 30.84 · 三餐',
+      body: 'DEMO CAFE · RM18.90，点开确认或修改',
+      url: `/?confirm=${id}`,
+      tag: `ledger-${id}`,
+    })
+    expect((res.body as { results: Array<{ id?: string }> }).results[0].id).toBe(id)
+  })
+
+  it('stays quiet for duplicates and failed items', async () => {
+    db.subs = [phone]
+    await handleIngest(req({ source: 'wechat', items: [item(1)] }), db, NOW)
+    db.pushes = []
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1), { amount: 'abc' }] }), db, NOW)
+    expect(res.body).toMatchObject({ inserted: 0, pushed: 0 })
+    expect(db.pushes).toEqual([])
+  })
+
+  it('sends one summary instead of a burst when many rows land at once', async () => {
+    db.subs = [phone]
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1), item(2), item(3), item(4)] }), db, NOW)
+    expect(res.body).toMatchObject({ inserted: 4, pushed: 1 })
+    expect(db.pushes).toHaveLength(1)
+    expect(db.pushes[0].payload).toEqual({ title: '自动记了 4 笔', body: '点开逐笔确认', url: '/', tag: 'ledger-batch' })
+  })
+
+  it('drops a subscription the push service says is gone, and keeps going', async () => {
+    db.subs = [phone, laptop]
+    db.pushOutcome = { s1: 'gone' }
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1), item(2)] }), db, NOW)
+    expect(res.body).toMatchObject({ inserted: 2, pushed: 2 })
+    expect(db.subs.map((s) => s.id)).toEqual(['s2'])
+    expect(db.pushes.map((p) => p.sub)).toEqual(['s2', 's2'])
+  })
+
+  it('never lets a push problem fail the booking', async () => {
+    db.subs = [phone, laptop]
+    db.pushOutcome = { s1: 'throw', s2: 'error' }
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1)] }), db, NOW)
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, inserted: 1, pushed: 0 })
+    expect(db.rows).toHaveLength(1)
+
+    db.failListSubs = true
+    const again = await handleIngest(req({ source: 'wechat', items: [item(2)] }), db, NOW)
+    expect(again.body).toMatchObject({ ok: true, inserted: 1, pushed: 0 })
+  })
+
+  it('does nothing when no device is subscribed', async () => {
+    const res = await handleIngest(req({ source: 'wechat', items: [item(1)] }), db, NOW)
+    expect(res.body).toMatchObject({ inserted: 1, pushed: 0 })
   })
 })
 

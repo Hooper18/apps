@@ -7,14 +7,34 @@
 // 业务规则都在 handler.ts / logic.ts，本地用 vitest 测。
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { handleIngest, type Db, type IngestRow } from './handler.ts'
+import { handleIngest, type Db, type IngestRow, type PushSubscriptionRow } from './handler.ts'
 import type { CategoryLite, TxLite } from './logic.ts'
+import { buildPushRequest, type VapidConfig } from './webpush.ts'
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
 
 const PAGE = 1000
+
+// 推送用的 VAPID 密钥。私钥只在函数的 secrets 里（supabase secrets set），公钥和客户端订阅时用的是同一个。
+// 没配置时不发推送，入账照常。
+function loadVapid(): VapidConfig | null {
+  const privateJwk = Deno.env.get('VAPID_PRIVATE_JWK')
+  const publicKey = Deno.env.get('VAPID_PUBLIC_KEY')
+  if (!privateJwk || !publicKey) return null
+  try {
+    return {
+      privateJwk: JSON.parse(privateJwk),
+      publicKey,
+      subject: Deno.env.get('VAPID_SUBJECT') ?? 'https://ledger.tuchenguang.com',
+    }
+  } catch {
+    console.error('[ingest] VAPID_PRIVATE_JWK is not valid JSON')
+    return null
+  }
+}
+const vapid = loadVapid()
 
 const db: Db = {
   async findUserByTokenHash(hash) {
@@ -104,6 +124,31 @@ const db: Db = {
     const code = currency === 'NTD' ? 'TWD' : currency
     const rate = json.rates?.[code]
     return typeof rate === 'number' && rate > 0 ? rate : null
+  },
+
+  async listPushSubscriptions(userId) {
+    const { data, error } = await supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth').eq('user_id', userId)
+    if (error) throw new Error(`push_subscriptions: ${error.message}`)
+    return (data ?? []) as PushSubscriptionRow[]
+  },
+
+  async sendPush(sub, text) {
+    if (!vapid) return 'error'
+    const req = await buildPushRequest(sub, text, vapid, Math.floor(Date.now() / 1000))
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+      signal: AbortSignal.timeout(8000),
+    })
+    if (res.ok) return 'ok'
+    if (res.status === 404 || res.status === 410) return 'gone'
+    console.error('[ingest] push rejected', res.status, (await res.text()).slice(0, 200))
+    return 'error'
+  },
+
+  async deletePushSubscription(id) {
+    await supabase.from('push_subscriptions').delete().eq('id', id)
   },
 }
 

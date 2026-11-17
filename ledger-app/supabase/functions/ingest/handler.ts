@@ -12,6 +12,7 @@ import {
 
 /** 写进 transactions 的一行。 */
 export interface IngestRow {
+  id: string
   user_id: string
   type: string
   amount: number
@@ -28,6 +29,14 @@ export interface IngestRow {
   updated_at: string
 }
 
+/** 一台设备的推送订阅。 */
+export interface PushSubscriptionRow {
+  id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
 export interface Db {
   findUserByTokenHash(hash: string): Promise<{ user_id: string; token_id: string } | null>
   touchToken(tokenId: string): Promise<void>
@@ -39,6 +48,10 @@ export interface Db {
   upsertRules(userId: string, rules: Array<{ merchant_key: string; category_id: string }>): Promise<void>
   /** 1 人民币 = 多少该币种（和客户端 exchange_rate 的含义一致）。拿不到返回 null。 */
   getRate(currency: string): Promise<number | null>
+  listPushSubscriptions(userId: string): Promise<PushSubscriptionRow[]>
+  /** 发一条推送。gone = 这个订阅已经失效（设备取消了或过期了），应该删掉。 */
+  sendPush(sub: PushSubscriptionRow, text: string): Promise<'ok' | 'gone' | 'error'>
+  deletePushSubscription(id: string): Promise<void>
 }
 
 export interface IngestRequest {
@@ -53,12 +66,25 @@ export interface IngestResponse {
 }
 
 interface ItemResult {
+  id?: string
   external_id: string | null
   status: 'inserted' | 'duplicate' | 'error'
   category?: string
   needs_review?: boolean
   error?: string
 }
+
+/** 推送里带的内容。客户端的 push-sw.js 按这个结构显示通知、处理点击。 */
+export interface PushPayload {
+  title: string
+  body: string
+  /** 点通知后打开的地址。单笔是 /?confirm=<流水 id>，客户端据此弹出确认页。 */
+  url: string
+  tag: string
+}
+
+/** 一次请求里新入账超过这么多笔，就合并成一条汇总推送，免得手机连着响。 */
+const MAX_SINGLE_PUSHES = 3
 
 export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
@@ -75,6 +101,59 @@ function readToken(req: IngestRequest): string | null {
 
 function money(amount: number): string {
   return amount.toFixed(2)
+}
+
+interface Inserted {
+  id: string
+  category: string
+  amount: number
+  currency: string
+  merchant: string
+  note: string
+}
+
+export function buildPushPayloads(inserted: Inserted[]): PushPayload[] {
+  if (inserted.length === 0) return []
+  if (inserted.length > MAX_SINGLE_PUSHES) {
+    return [{ title: `自动记了 ${inserted.length} 笔`, body: '点开逐笔确认', url: '/', tag: 'ledger-batch' }]
+  }
+  return inserted.map((r) => ({
+    title: `已记 ${r.currency} ${money(r.amount)} · ${r.category}`,
+    body: [[r.merchant, r.note].filter((s) => s).join(' · '), '点开确认或修改'].filter((s) => s).join('，'),
+    url: `/?confirm=${r.id}`,
+    tag: `ledger-${r.id}`,
+  }))
+}
+
+/** 给这个用户的每台已订阅设备发推送。任何失败都不影响入账，只在返回值里报个数。 */
+async function pushAll(db: Db, userId: string, payloads: PushPayload[]): Promise<number> {
+  if (payloads.length === 0) return 0
+  let sent = 0
+  try {
+    const subs = await db.listPushSubscriptions(userId)
+    for (const sub of subs) {
+      for (const payload of payloads) {
+        let outcome: 'ok' | 'gone' | 'error'
+        try {
+          outcome = await db.sendPush(sub, JSON.stringify(payload))
+        } catch {
+          outcome = 'error'
+        }
+        if (outcome === 'ok') sent += 1
+        if (outcome === 'gone') {
+          try {
+            await db.deletePushSubscription(sub.id)
+          } catch {
+            // 删不掉下次再删
+          }
+          break // 这台设备的订阅没了，后面的也不用发
+        }
+      }
+    }
+  } catch {
+    // 读不到订阅表（比如 004 迁移还没跑）：当作没有订阅
+  }
+  return sent
 }
 
 export async function handleIngest(req: IngestRequest, db: Db, now: Date): Promise<IngestResponse> {
@@ -124,7 +203,7 @@ export async function handleIngest(req: IngestRequest, db: Db, now: Date): Promi
   }
 
   const results: ItemResult[] = []
-  let lastInserted: { category: string; amount: number; currency: string; merchant: string } | null = null
+  const inserted: Inserted[] = []
 
   for (const item of parsed.items) {
     if (!item.ok) {
@@ -141,6 +220,7 @@ export async function handleIngest(req: IngestRequest, db: Db, now: Date): Promi
       continue
     }
     const row: IngestRow = {
+      id: crypto.randomUUID(),
       user_id: who.user_id,
       type: item.type,
       amount: item.amount,
@@ -152,7 +232,8 @@ export async function handleIngest(req: IngestRequest, db: Db, now: Date): Promi
       source: parsed.source,
       external_id: item.external_id,
       merchant: item.merchant || null,
-      needs_review: picked.needs_review,
+      // 自动记的每一笔都等用户看一眼（确认金额、类目，或者 AA），确认后客户端把它清掉
+      needs_review: true,
       created_at: item.occurred_at,
       updated_at: now.toISOString(),
     }
@@ -167,31 +248,32 @@ export async function handleIngest(req: IngestRequest, db: Db, now: Date): Promi
       continue
     }
     const category = categoryName.get(picked.category_id) ?? ''
-    results.push({ external_id: item.external_id, status: 'inserted', category, needs_review: picked.needs_review })
-    lastInserted = { category, amount: item.amount, currency: item.currency, merchant: item.merchant }
+    results.push({ id: row.id, external_id: item.external_id, status: 'inserted', category, needs_review: true })
+    inserted.push({ id: row.id, category, amount: item.amount, currency: item.currency, merchant: item.merchant, note: item.note })
   }
 
-  const inserted = results.filter((r) => r.status === 'inserted').length
+  const insertedCount = inserted.length
   const duplicates = results.filter((r) => r.status === 'duplicate').length
   const errors = results.filter((r) => r.status === 'error').length
 
   let message: string
   if (parsed.items.length === 1) {
-    if (lastInserted) {
-      message = ['已记', lastInserted.category, `${lastInserted.currency} ${money(lastInserted.amount)}`, lastInserted.merchant]
-        .filter((s) => s)
-        .join(' ')
+    const one = inserted[0]
+    if (one) {
+      message = ['已记', one.category, `${one.currency} ${money(one.amount)}`, one.merchant].filter((s) => s).join(' ')
     } else if (duplicates) {
       message = '这笔已经记过了'
     } else {
       message = `没记上：${results[0]?.error ?? 'unknown'}`
     }
   } else {
-    const parts = [`新入账 ${inserted} 笔`]
+    const parts = [`新入账 ${insertedCount} 笔`]
     if (duplicates) parts.push(`已存在 ${duplicates} 笔`)
     if (errors) parts.push(`失败 ${errors} 笔`)
     message = parts.join('，')
   }
 
-  return { status: 200, body: { ok: true, inserted, duplicates, errors, results, message } }
+  const pushed = await pushAll(db, who.user_id, buildPushPayloads(inserted))
+
+  return { status: 200, body: { ok: true, inserted: insertedCount, duplicates, errors, pushed, results, message } }
 }

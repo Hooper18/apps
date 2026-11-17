@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
@@ -105,6 +105,34 @@ const { user } = useAuth()
   // ── 数据来自 hooks（全量缓存，月份切换在客户端过滤） ──
   const { transactions: allTxs, loading: txLoading, remove: removeTx } = useTransactions()
   const { categories } = useCategories()
+
+  // 付款提醒点进来的地址是 /?confirm=<流水 id>：找到那一笔，直接进确认页。
+  // 刚入账的那一笔本地可能还没拉到，回到前台时 useSync 会重新同步，拉到后这里再跳。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const confirmId = searchParams.get('confirm')
+  useEffect(() => {
+    if (!confirmId) return
+    const t = allTxs.find((x) => x.id === confirmId)
+    if (!t) return
+    const c = categories.find((x) => x.id === t.category_id)
+    const tx = {
+      id: t.id,
+      type: t.type,
+      amount: t.amount,
+      currency: t.currency,
+      description: t.description,
+      date: t.date,
+      category_id: t.category_id,
+      exchange_rate: t.exchange_rate,
+      direction: t.direction,
+      source: t.source,
+      merchant: t.merchant,
+      needs_review: t.needs_review,
+      categories: c ? { name: c.name, icon: c.icon } : null,
+    } as TxDetail
+    setSearchParams({}, { replace: true })
+    navigate('/add', { state: { tx } })
+  }, [confirmId, allTxs, categories, navigate, setSearchParams])
 
   const transactions: TxDetail[] = useMemo(() => {
     const start = `${year}-${String(month).padStart(2, '0')}-01`

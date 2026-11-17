@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { generateToken, hashToken, ingestEndpoint } from '../lib/ingestToken'
+import { disablePush, enablePush, isPushEnabled, pushSupported } from '../lib/push'
 
 interface TokenRow {
   id: string
@@ -57,6 +58,34 @@ export default function AutoIngest() {
   const [createFailed, setCreateFailed] = useState(false)
   const [newToken, setNewToken] = useState('')
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  // 付款提醒（这台设备的系统通知）
+  const canPush = pushSupported()
+  const [pushOn, setPushOn] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushProblem, setPushProblem] = useState<'pushDenied' | 'pushFailed' | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void isPushEnabled().then((on) => { if (alive) setPushOn(on) })
+    return () => { alive = false }
+  }, [])
+
+  async function togglePush() {
+    if (!user || pushBusy) return
+    setPushBusy(true)
+    setPushProblem(null)
+    if (pushOn) {
+      await disablePush()
+      setPushOn(false)
+    } else {
+      const result = await enablePush(user.id, navigator.userAgent.includes('iPhone') ? 'iPhone' : '')
+      if (result === 'ok') setPushOn(true)
+      else if (result === 'denied') setPushProblem('pushDenied')
+      else if (result === 'failed') setPushProblem('pushFailed')
+    }
+    setPushBusy(false)
+  }
 
   const endpoint = ingestEndpoint()
 
@@ -130,6 +159,28 @@ export default function AutoIngest() {
 
       <div className="flex-1 min-h-0 overflow-y-auto pb-safe-6" onClick={() => setConfirmingId(null)}>
         <p className="px-8 pt-2 text-[13px] leading-[20px] text-gray-500">{t('autoIngestIntro')}</p>
+
+        {/* 付款提醒 */}
+        <p className="px-8 pt-6 pb-2 text-[13px] leading-[18px] text-gray-500">{t('pushSection')}</p>
+        <div className="mx-4 bg-white rounded-2xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-base text-gray-900">{pushOn ? t('pushOn') : t('pushOff')}</p>
+              <p className="text-[13px] leading-[18px] text-gray-400 mt-0.5">{t('pushDesc')}</p>
+            </div>
+            <button
+              onClick={togglePush}
+              disabled={!canPush || pushBusy || !user}
+              className={`shrink-0 h-11 px-5 rounded-xl text-base font-semibold disabled:opacity-50 transition-colors ${
+                pushOn ? 'bg-gray-50 text-gray-900 active:bg-gray-100' : 'bg-primary text-white active:bg-primary-dark'
+              }`}
+            >
+              {pushOn ? t('pushDisable') : t('pushEnable')}
+            </button>
+          </div>
+          {!canPush && <p className="mt-3 text-[13px] leading-[18px] text-gray-500">{t('pushUnsupported')}</p>}
+          {pushProblem && <p className="mt-3 text-[13px] leading-[18px] text-red-600">{t(pushProblem)}</p>}
+        </div>
 
         {/* 生成令牌 */}
         <p className="px-8 pt-6 pb-2 text-[13px] leading-[18px] text-gray-500">{t('autoIngestNewSection')}</p>

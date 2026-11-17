@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { CurrencyProvider } from './contexts/CurrencyContext'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
@@ -55,6 +55,21 @@ function AppRoutes() {
     if (!user) return
     void migratePetToFruit(user.id)
   }, [user])
+
+  // 付款提醒：App 开着的时候点了通知，Service Worker（public/push-sw.js）会发消息过来，
+  // 这里跳到通知指的页面（/?confirm=<流水 id>）。App 没开的话是直接打开那个地址，不走这里。
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string; url?: string } | null
+      if (data?.type === 'ledger:open' && typeof data.url === 'string' && data.url.startsWith('/')) {
+        navigate(data.url)
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [navigate])
 
   if (loading) return <LoadingScreen />
 

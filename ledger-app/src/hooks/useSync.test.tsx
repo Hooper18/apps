@@ -22,7 +22,7 @@ vi.mock('../lib/sync', () => ({
   },
 }))
 
-import { useSync } from './useSync'
+import { RESUME_SYNC_MIN_INTERVAL_MS, useSync } from './useSync'
 import * as outbox from '../lib/outbox'
 
 beforeEach(() => {
@@ -99,5 +99,58 @@ describe('useSync', () => {
       for (const cb of syncState.subscribers) cb('idle')
     })
     expect(result.current.syncing).toBe(false)
+  })
+
+  describe('回到前台', () => {
+    function setVisibility(state: 'visible' | 'hidden') {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    })
+
+    it('从后台切回前台时同步一次（自动入账的流水靠这个出现）', () => {
+      authState.user = { id: 'u1' }
+      renderHook(() => useSync())
+      syncState.syncMock.mockClear()
+      setVisibility('hidden')
+      expect(syncState.syncMock).not.toHaveBeenCalled()
+      setVisibility('visible')
+      expect(syncState.syncMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('短时间内来回切只同步一次，过了间隔才再同步', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-15T10:00:00Z'))
+      authState.user = { id: 'u1' }
+      renderHook(() => useSync())
+      syncState.syncMock.mockClear()
+      setVisibility('visible')
+      setVisibility('hidden')
+      setVisibility('visible')
+      expect(syncState.syncMock).toHaveBeenCalledTimes(1)
+      vi.setSystemTime(new Date(Date.now() + RESUME_SYNC_MIN_INTERVAL_MS + 1))
+      setVisibility('visible')
+      expect(syncState.syncMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('pageshow（从后台恢复的页面）也会触发', () => {
+      authState.user = { id: 'u1' }
+      renderHook(() => useSync())
+      syncState.syncMock.mockClear()
+      act(() => {
+        window.dispatchEvent(new Event('pageshow'))
+      })
+      expect(syncState.syncMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('没登录时不同步', () => {
+      renderHook(() => useSync())
+      setVisibility('visible')
+      expect(syncState.syncMock).not.toHaveBeenCalled()
+    })
   })
 })

@@ -10,6 +10,7 @@ import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
 import { useCategorySort } from '../hooks/useCategorySort'
 import { rememberMerchant } from '../lib/merchantRules'
+import { amountText, splitShare, withAaNote } from '../lib/aa'
 import type { TransactionType, Currency, TxDetail } from '../types'
 import {
   EXPENSE_CATEGORIES,
@@ -51,6 +52,8 @@ export default function AddTransaction() {
   const editTx = (location.state as { tx?: TxDetail } | null)?.tx
   // 这条流水是自动入账的（电脑同步 / 快捷指令写进来的），不是手记的
   const isAutoTx = !!editTx?.source
+  // 自动入账后还没被人看过：标题和按钮写「确认」，保存即确认
+  const needsConfirm = isAutoTx && !!editTx?.needs_review
 
   const [type, setType]         = useState<TransactionType>((editTx?.type as TransactionType) ?? 'expense')
   const [amount, setAmount]     = useState(editTx ? String(editTx.amount) : '0')
@@ -63,6 +66,9 @@ export default function AddTransaction() {
   const [transferDir, setTransferDir] = useState<'in' | 'out'>(
     (editTx?.direction as 'in' | 'out') ?? 'in',
   )
+  // AA：记下垫付的总额和人数，金额框里显示的是我自己那一份。手动改金额就退出 AA。
+  const [aa, setAa] = useState<{ total: number; people: number } | null>(null)
+  const [aaOpen, setAaOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCurrencyPicker, setShowCPicker] = useState(false)
   const [pickerStyle, setPickerStyle] = useState<React.CSSProperties>({})
@@ -147,6 +153,7 @@ export default function AddTransaction() {
   // ─── Numpad ──────────────────────────────────────────────────────────────
 
   function numPress(key: string) {
+    setAa(null)
     setAmount(prev => {
       if (key === '.') return prev.includes('.') ? prev : prev + '.'
       const dotIdx = prev.indexOf('.')
@@ -157,7 +164,23 @@ export default function AddTransaction() {
   }
 
   function numDel() {
+    setAa(null)
     setAmount(prev => (prev.length <= 1 ? '0' : prev.slice(0, -1)))
+  }
+
+  // ─── AA ──────────────────────────────────────────────────────────────────
+
+  /** 选人数：金额变成每人一份；再点一次同一个人数就取消，金额还原成总额。 */
+  function chooseAA(people: number) {
+    if (aa && aa.people === people) {
+      setAmount(amountText(aa.total))
+      setAa(null)
+      return
+    }
+    const total = aa ? aa.total : parseFloat(amount)
+    if (!total) { showToast(t('amountRequired')); return }
+    setAa({ total, people })
+    setAmount(amountText(splitShare(total, people)))
   }
 
   // ─── Submit ───────────────────────────────────────────────────────────────
@@ -196,7 +219,7 @@ export default function AddTransaction() {
     const payload = {
       type, amount: parseFloat(amount), currency,
       category_id: categoryId,
-      description: note.trim() || null, date,
+      description: (aa ? withAaNote(note, aa.total, aa.people, symbol) : note.trim()) || null, date,
       exchange_rate,
       // 仅 transfer 写 direction，其它类型一律 null（useTransactions 也会再兜底一次）
       direction: type === 'transfer' ? transferDir : null,
@@ -248,7 +271,9 @@ export default function AddTransaction() {
             <X size={16} strokeWidth={2.4} className="text-gray-500" />
           </span>
         </button>
-        <h1 className="text-base font-semibold text-gray-900">{editTx ? t('editTx') : t('addTx')}</h1>
+        <h1 className="text-base font-semibold text-gray-900">
+          {needsConfirm ? t('confirmTx') : editTx ? t('editTx') : t('addTx')}
+        </h1>
         <div className="w-11" />
       </div>
 
@@ -367,11 +392,42 @@ export default function AddTransaction() {
       {/* Fixed bottom: amount + numpad */}
       <div className="shrink-0 bg-white px-3 pt-2 pb-safe-2">
 
+        {/* AA：选几个人均摊。只有支出才有 */}
+        {type === 'expense' && aaOpen && (
+          <div className="px-2 pb-2">
+            <div className="flex items-center gap-1.5">
+              {[2, 3, 4, 5, 6, 8].map((n) => (
+                <button key={n} type="button" onClick={() => chooseAA(n)}
+                  aria-label={`AA ${n}`} aria-pressed={aa?.people === n}
+                  className={`hit-44 flex-1 min-w-0 h-8 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
+                    aa?.people === n ? 'bg-primary text-white' : 'bg-gray-50 text-gray-600 active:bg-gray-100'
+                  }`}>
+                  {n}{t('aaPeopleSuffix')}
+                </button>
+              ))}
+            </div>
+            <p className="pt-1.5 text-[13px] leading-[18px] text-gray-500">
+              {aa
+                ? t('aaSummary', { total: `${symbol} ${aa.total.toFixed(2)}`, people: aa.people })
+                : t('aaHint')}
+            </p>
+          </div>
+        )}
+
         {/* Amount display */}
         <div className="flex items-baseline gap-1.5 px-2 pb-2">
           <span className="font-num text-lg tall:text-xl text-gray-400">{symbol}</span>
           {/* text-3xl 这个类名测试在用，别删；高屏上再放大一档 */}
           <span className="font-num text-3xl tall:text-[40px] tall:leading-[44px] font-bold text-gray-900 tracking-tight flex-1 truncate">{amount}</span>
+          {type === 'expense' && (
+            <button type="button" onClick={() => setAaOpen((o) => !o)}
+              aria-label={t('aaToggle')} aria-expanded={aaOpen}
+              className={`hit-44 self-center shrink-0 h-8 px-3 rounded-full text-[13px] font-semibold transition-colors ${
+                aa ? 'bg-primary text-white' : aaOpen ? 'bg-primary/10 text-primary-dark' : 'bg-gray-50 text-gray-600 active:bg-gray-100'
+              }`}>
+              AA
+            </button>
+          )}
         </div>
 
         {/* Numpad */}
@@ -412,7 +468,7 @@ export default function AddTransaction() {
           {/* Save/update spans 2 rows */}
           <button onClick={() => handleSave(false)} disabled={submitting}
             className="row-span-2 bg-primary text-white rounded-xl text-base font-semibold active:bg-primary-dark transition-colors disabled:opacity-50">
-            {submitting ? '…' : editTx ? t('update') : t('save')}
+            {submitting ? '…' : needsConfirm ? t('confirmTx') : editTx ? t('update') : t('save')}
           </button>
 
           <button onClick={() => numPress('0')}

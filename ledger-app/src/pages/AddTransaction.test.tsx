@@ -279,8 +279,10 @@ describe('AddTransaction: 保存路径', () => {
       },
     }
     renderPage(locationState.value)
+    // 还没确认过的自动流水：标题和按钮都写「确认」
+    expect(screen.getByRole('heading', { name: 'confirmTx' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /三餐/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'update' }))
+    fireEvent.click(screen.getByRole('button', { name: 'confirmTx' }))
     await Promise.resolve()
     await Promise.resolve()
     expect(updateMock).toHaveBeenCalledWith(
@@ -334,11 +336,85 @@ describe('AddTransaction: 保存路径', () => {
     renderPage(locationState.value)
     fireEvent.click(screen.getByRole('button', { name: 'income' }))
     fireEvent.click(screen.getByRole('button', { name: /工资/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'update' }))
+    fireEvent.click(screen.getByRole('button', { name: 'confirmTx' }))
     await Promise.resolve()
     await Promise.resolve()
     expect(updateMock).toHaveBeenCalledWith('auto-tx', expect.objectContaining({ type: 'income', needs_review: false }))
     expect(rememberMerchantMock).not.toHaveBeenCalled()
+  })
+
+  it('已经确认过的自动流水再编辑：按钮还是「更新」', () => {
+    locationState.value = {
+      tx: {
+        id: 'auto-tx', type: 'expense', amount: 9, currency: 'CNY', description: 'X', date: '2026-11-14',
+        category_id: 'cat-food', exchange_rate: null, source: 'wechat', merchant: 'X', needs_review: false,
+        categories: { name: '三餐', icon: '🍚' },
+      },
+    }
+    renderPage(locationState.value)
+    expect(screen.getByRole('button', { name: 'update' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'confirmTx' })).not.toBeInTheDocument()
+  })
+
+  it('AA：选 4 人，金额变成每人一份，备注记下总额和人数', async () => {
+    locationState.value = {
+      tx: {
+        id: 'auto-tx', type: 'expense', amount: 400, currency: 'CNY', description: 'DEMO CAFE', date: '2026-11-14',
+        category_id: 'cat-food', exchange_rate: null, source: 'wechat', merchant: 'DEMO CAFE', needs_review: true,
+        categories: { name: '三餐', icon: '🍚' },
+      },
+    }
+    renderPage(locationState.value)
+    expect(screen.queryByRole('button', { name: 'AA 4' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'aaToggle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AA 4' }))
+    expect(amountDisplay()).toBe('100')
+    fireEvent.click(screen.getByRole('button', { name: 'confirmTx' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(updateMock).toHaveBeenCalledWith(
+      'auto-tx',
+      expect.objectContaining({ amount: 100, description: 'DEMO CAFE · AA 4人 总额 ¥400.00' }),
+    )
+  })
+
+  it('AA：换人数按总额重算；再点一次同一个人数取消，金额还原', () => {
+    renderPage()
+    clickKey('9'); clickKey('0')
+    fireEvent.click(screen.getByRole('button', { name: 'aaToggle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AA 3' }))
+    expect(amountDisplay()).toBe('30')
+    fireEvent.click(screen.getByRole('button', { name: 'AA 2' }))
+    expect(amountDisplay()).toBe('45')
+    fireEvent.click(screen.getByRole('button', { name: 'AA 2' }))
+    expect(amountDisplay()).toBe('90')
+  })
+
+  it('AA 之后手动改金额就退出 AA，备注不再加 AA 记录', async () => {
+    renderPage()
+    clickKey('9'); clickKey('0')
+    fireEvent.click(screen.getByRole('button', { name: /三餐/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'aaToggle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AA 3' }))
+    clickKey('5')
+    expect(amountDisplay()).toBe('305')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ amount: 305, description: null }))
+  })
+
+  it('AA：金额是 0 时不做', () => {
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'aaToggle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AA 2' }))
+    expect(amountDisplay()).toBe('0')
+  })
+
+  it('收入和转账没有 AA 按钮', () => {
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'income' }))
+    expect(screen.queryByRole('button', { name: 'aaToggle' })).not.toBeInTheDocument()
   })
 
   it('未登录时早退，不调 insert/update', async () => {

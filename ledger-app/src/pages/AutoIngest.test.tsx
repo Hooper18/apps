@@ -63,6 +63,26 @@ vi.mock('../lib/supabase', () => ({
   },
 }))
 
+const push = vi.hoisted(() => ({
+  supported: true,
+  enabled: false,
+  enableResult: 'ok' as 'ok' | 'denied' | 'unsupported' | 'failed',
+  enableCalls: [] as Array<[string, string]>,
+  disableCalls: 0,
+}))
+vi.mock('../lib/push', () => ({
+  pushSupported: () => push.supported,
+  isPushEnabled: () => Promise.resolve(push.enabled),
+  enablePush: (userId: string, label: string) => {
+    push.enableCalls.push([userId, label])
+    return Promise.resolve(push.enableResult)
+  },
+  disablePush: () => {
+    push.disableCalls += 1
+    return Promise.resolve()
+  },
+}))
+
 import AutoIngest from './AutoIngest'
 import { hashToken } from '../lib/ingestToken'
 
@@ -77,6 +97,11 @@ beforeEach(() => {
   supa.insertError = null
   supa.inserted = []
   supa.deleted = []
+  push.supported = true
+  push.enabled = false
+  push.enableResult = 'ok'
+  push.enableCalls = []
+  push.disableCalls = 0
 })
 
 describe('AutoIngest', () => {
@@ -135,6 +160,46 @@ describe('AutoIngest', () => {
     fireEvent.click(screen.getByRole('button', { name: 'autoIngestRevokeConfirm' }))
     await waitFor(() => expect(supa.deleted).toEqual(['t1']))
     await waitFor(() => expect(screen.queryByText('电脑')).not.toBeInTheDocument())
+  })
+
+  it('付款提醒：开启成功后显示已开启，再点一次关闭', async () => {
+    render(<AutoIngest />)
+    await screen.findByText('电脑')
+    expect(screen.getByText('pushOff')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'pushEnable' }))
+    expect(await screen.findByText('pushOn')).toBeInTheDocument()
+    expect(push.enableCalls).toEqual([['u1', '']])
+    fireEvent.click(screen.getByRole('button', { name: 'pushDisable' }))
+    expect(await screen.findByText('pushOff')).toBeInTheDocument()
+    expect(push.disableCalls).toBe(1)
+  })
+
+  it('付款提醒：进页面时这台设备已经开着，就显示已开启', async () => {
+    push.enabled = true
+    render(<AutoIngest />)
+    expect(await screen.findByText('pushOn')).toBeInTheDocument()
+  })
+
+  it('付款提醒：权限被拒或开启失败时说明原因，状态仍是未开启', async () => {
+    push.enableResult = 'denied'
+    render(<AutoIngest />)
+    await screen.findByText('电脑')
+    fireEvent.click(screen.getByRole('button', { name: 'pushEnable' }))
+    expect(await screen.findByText('pushDenied')).toBeInTheDocument()
+    expect(screen.getByText('pushOff')).toBeInTheDocument()
+
+    push.enableResult = 'failed'
+    fireEvent.click(screen.getByRole('button', { name: 'pushEnable' }))
+    expect(await screen.findByText('pushFailed')).toBeInTheDocument()
+    expect(screen.queryByText('pushDenied')).not.toBeInTheDocument()
+  })
+
+  it('付款提醒：设备不支持时按钮不可点，并说明怎么办', async () => {
+    push.supported = false
+    render(<AutoIngest />)
+    await screen.findByText('电脑')
+    expect(screen.getByRole('button', { name: 'pushEnable' })).toBeDisabled()
+    expect(screen.getByText('pushUnsupported')).toBeInTheDocument()
   })
 
   it('返回按钮回上一页', async () => {

@@ -25,6 +25,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // 付款提醒：推送的显示和点击写在 public/push-sw.js，由生成的 sw.js 引入
+        importScripts: ['/push-sw.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
         runtimeCaching: [
           {

@@ -18,7 +18,7 @@ concurrency:
 jobs:
   ledger-app:
     name: ledger-app
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest 已是 26.04，Playwright 1.60 装不了 chromium（2026-11-17）
     # e2e 跑真实构建产物：Vite build 会把 VITE_* 内联进 bundle，缺了 src/lib/supabase.ts 会抛错→白屏→跳转超时。
     # CI 没有 .env（已 gitignore），注入与 .env.test 同款 stub；e2e 用 page.route 拦掉所有 supabase REST/auth，假 URL 足够。
     env:
@@ -61,7 +61,7 @@ jobs:
 
   schedule-app:
     name: schedule-app
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest 已是 26.04，Playwright 1.60 装不了 chromium（2026-11-17）
     # 同 ledger-app：注入 stub VITE_SUPABASE_* 让真实构建产物在 CI 无 .env 时也能启动；e2e 已 page.route 拦截 supabase。
     env:
       VITE_SUPABASE_URL: http://localhost:54321
